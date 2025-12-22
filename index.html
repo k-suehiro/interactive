@@ -36,6 +36,24 @@
             background-position: center;
             transition: background-image 0.5s ease-in-out;
         }
+
+        /* 字幕コンテナ（1行表示、高さ固定） */
+        #subtitle-container {
+            min-height: 64px;
+            max-height: 64px;
+        }
+
+        /* 字幕テキスト内のマーカー */
+        .subtitle-marker {
+            background-color: rgba(59, 130, 246, 0.3);
+            padding: 2px 4px;
+            border-radius: 3px;
+            transition: all 0.2s ease;
+        }
+
+        .dark .subtitle-marker {
+            background-color: rgba(59, 130, 246, 0.4);
+        }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 flex items-center justify-center min-h-screen font-sans text-gray-800 dark:text-gray-200 transition-colors duration-300">
@@ -110,18 +128,20 @@
 
         </div>
 
-        <!-- コントロールバー -->
-        <div class="absolute bottom-0 left-0 right-0 bg-white/80 dark:bg-black/60 backdrop-blur-md p-4 flex items-center justify-between z-30 text-gray-800 dark:text-white border-t border-gray-200 dark:border-white/5 transition-colors duration-300">
+        <!-- コントロールバー（高さ固定） -->
+        <div class="absolute bottom-0 left-0 right-0 bg-white/80 dark:bg-black/60 backdrop-blur-md p-4 flex items-center justify-between z-30 text-gray-800 dark:text-white border-t border-gray-200 dark:border-white/5 transition-colors duration-300 h-24">
             <!-- 左ナビゲーション -->
             <button id="btn-prev" class="flex items-center space-x-2 px-6 py-3 bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed text-sm sm:text-base">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
                 <span class="font-medium">前へ</span>
             </button>
 
-            <!-- 中央：字幕表示エリア -->
+            <!-- 中央：字幕表示エリア（1行表示＋マーカー方式） -->
             <div class="flex-1 flex items-center justify-center px-4">
-                <div id="subtitle-text" class="text-lg sm:text-xl text-gray-800 dark:text-gray-100 font-medium text-center min-h-[2rem] flex items-center justify-center">
-                    <span class="opacity-60">再生ボタンを押して開始</span>
+                <div id="subtitle-container" class="w-full max-w-4xl h-16 flex items-center justify-center bg-white/50 dark:bg-black/30 rounded-lg px-4 border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <div id="subtitle-text" class="text-lg sm:text-xl text-gray-800 dark:text-gray-100 font-medium text-center w-full">
+                        <span class="opacity-60">再生ボタンを押して開始</span>
+                    </div>
                 </div>
             </div>
 
@@ -190,11 +210,8 @@
         let audioContext = null;
         let currentAudio = null;
         let sequenceTimeout = null;
-        let subtitleInterval = null; // 字幕タイマー
-        let subtitlePauseTime = null; // 字幕タイマーの一時停止時刻
-        let subtitleRemainingTime = null; // 字幕タイマーの残り時間
-        let subtitleState = null; // 字幕タイマーの状態（{array, currentIndex, startTime, duration, totalElapsed}）
-        let subtitleTotalElapsed = 0; // 字幕タイマーの累積経過時間（一時停止を考慮）
+        let subtitleAnimationFrame = null; // 字幕マーカー更新用のrequestAnimationFrame ID
+        let subtitleState = null; // 字幕状態（{preparedSubtitles, activeIndex}）
         let currentTalkingCharacter = null; // 現在話しているキャラクター（'man' または 'woman'）
         let preloadedAudios = {}; // プリロード済み音声のキャッシュ
 
@@ -212,6 +229,7 @@
             btnPlay: document.getElementById('btn-play'),
             iconPlay: document.getElementById('icon-play'),
             iconPause: document.getElementById('icon-pause'),
+            subtitleContainer: document.getElementById('subtitle-container'),
             subtitleText: document.getElementById('subtitle-text'),
             sceneBg: document.getElementById('scene-background'),
             themeToggle: document.getElementById('theme-toggle'),
@@ -547,8 +565,11 @@
                 setCharacterState(currentTalkingCharacter, 'silent');
             }
             
-            // 字幕タイマーを一時停止
-            pauseSubtitleTimer();
+            // 字幕マーカー更新を停止（一時停止時はcurrentTimeが保持されるため、再開時に自動的に同期される）
+            if (subtitleAnimationFrame) {
+                cancelAnimationFrame(subtitleAnimationFrame);
+                subtitleAnimationFrame = null;
+            }
         }
 
         // 再生再開処理
@@ -569,8 +590,10 @@
                 setCharacterState(currentTalkingCharacter, 'talking');
             }
             
-            // 字幕タイマーを再開
-            resumeSubtitleTimer();
+            // 字幕マーカー更新を再開（currentTimeは保持されているため、自動的に同期される）
+            if (subtitleState && currentAudio) {
+                updateSubtitleMarker();
+            }
         }
 
         function updatePlayBtnUI(playing) {
@@ -611,8 +634,7 @@
             }
             
             clearTimeout(sequenceTimeout);
-            stopSubtitleTimer();
-            updateSubtitle("再生ボタンを押して開始", true);
+            stopSubtitleDisplay();
             
             // 自動再生モードも停止
             if (isAutoPlayMode) {
@@ -621,234 +643,157 @@
             }
         }
 
-        // 字幕を更新する関数
-        function updateSubtitle(text, isPlaceholder = false) {
-            if (isPlaceholder) {
-                els.subtitleText.innerHTML = `<span class="opacity-60">${text}</span>`;
-            } else {
-                els.subtitleText.innerHTML = `<span>${text}</span>`;
-            }
-        }
-
-        // 字幕タイマーを開始する関数（各字幕ごとに設定された時間で切り替え）
-        function startSubtitleTimer(subtitleArray) {
-            // 既存のタイマーをクリア
-            stopSubtitleTimer();
-            
+        // 字幕データから累積時間を計算して準備
+        function prepareSubtitles(subtitleArray) {
             if (!subtitleArray || subtitleArray.length === 0) {
+                return [];
+            }
+
+            let currentTime = 0;
+            return subtitleArray.map(item => {
+                const duration = typeof item === 'string' ? 2000 : (item.duration || 2000);
+                const startTime = currentTime;
+                const endTime = currentTime + duration;
+                currentTime = endTime;
+                return {
+                    text: typeof item === 'string' ? item : item.text,
+                    duration: duration,
+                    startTime: startTime,
+                    endTime: endTime
+                };
+            });
+        }
+
+        // 字幕を1行で表示する関数（マーカー方式）
+        function renderSubtitleWithMarker(preparedSubtitles) {
+            if (!els.subtitleText) return;
+            
+            if (!preparedSubtitles || preparedSubtitles.length === 0) {
+                els.subtitleText.innerHTML = '<span class="opacity-60">字幕データがありません</span>';
                 return;
             }
 
-            // 字幕を取得するヘルパー関数
-            function getSubtitleText(item) {
-                if (typeof item === 'string') {
-                    return item;
-                } else if (item && item.text) {
-                    return item.text;
-                }
-                return '';
-            }
-
-            // 字幕の表示時間を取得するヘルパー関数（デフォルト2000ms）
-            function getSubtitleDuration(item) {
-                if (typeof item === 'string') {
-                    return 2000; // デフォルト2秒
-                } else if (item && item.duration) {
-                    return item.duration;
-                }
-                return 2000; // デフォルト2秒
-            }
-
-            // 字幕タイマーの状態を初期化
-            subtitleState = {
-                array: subtitleArray,
-                currentIndex: 0,
-                startTime: Date.now(),
-                duration: 0,
-                totalElapsed: 0 // 累積経過時間（一時停止を考慮）
-            };
-            subtitleTotalElapsed = 0;
-
-            // 最初の字幕を表示
-            if (subtitleArray[0]) {
-                const firstItem = subtitleArray[0];
-                const firstText = getSubtitleText(firstItem);
-                const firstDuration = getSubtitleDuration(firstItem);
-                
-                updateSubtitle(firstText);
-                subtitleState.duration = firstDuration;
-                subtitleState.startTime = Date.now();
-                subtitleState.currentIndex = 0;
-
-                // 次の字幕がある場合は、設定された時間後に次の字幕を表示
-                if (subtitleArray.length > 1) {
-                    subtitleInterval = setTimeout(() => {
-                        showNextSubtitleGlobal();
-                    }, firstDuration);
-                } else {
-                    // 最後の字幕の場合は、設定された時間後にタイマーを停止
-                    subtitleInterval = setTimeout(() => {
-                        stopSubtitleTimer();
-                    }, firstDuration);
-                }
-            }
+            // 全字幕を結合して1行のテキストとして表示
+            const fullText = preparedSubtitles.map(sub => sub.text).join('');
+            els.subtitleText.innerHTML = fullText;
         }
-        
-        // 次の字幕を表示する関数（グローバルスコープ）
-        function showNextSubtitleGlobal() {
-            if ((!isPlaying && !isAutoPlayMode) || isPaused || !subtitleState) {
+
+        // 字幕のマーカーを更新（1行表示内で現在話している部分をハイライト）
+        function updateSubtitleMarker() {
+            if (!currentAudio || !subtitleState) {
+                subtitleAnimationFrame = null;
                 return;
             }
-
-            const getSubtitleText = (item) => {
-                if (typeof item === 'string') return item;
-                return item && item.text ? item.text : '';
-            };
-            const getSubtitleDuration = (item) => {
-                if (typeof item === 'string') return 2000;
-                return item && item.duration ? item.duration : 2000;
-            };
-
-            if (subtitleState.currentIndex + 1 < subtitleState.array.length) {
-                subtitleState.currentIndex++;
-                const subtitleItem = subtitleState.array[subtitleState.currentIndex];
-                const text = getSubtitleText(subtitleItem);
-                const duration = getSubtitleDuration(subtitleItem);
-                
-                updateSubtitle(text);
-                subtitleState.startTime = Date.now();
-                subtitleState.duration = duration;
-
-                // 次の字幕がある場合は、設定された時間後に次の字幕を表示
-                if (subtitleState.currentIndex + 1 < subtitleState.array.length) {
-                    subtitleInterval = setTimeout(() => {
-                        showNextSubtitleGlobal();
-                    }, duration);
+            
+            // 一時停止中はマーカー更新を停止（再開時に自動的に同期される）
+            if (isPaused || !isPlaying) {
+                subtitleAnimationFrame = null;
+                return;
+            }
+            
+            // 音声が一時停止中でも、再生準備中（readyStateが十分な場合）は更新を続ける
+            // これにより、音声再生開始直後でもマーカー更新が継続される
+            if (currentAudio.paused && currentAudio.readyState < 3) {
+                subtitleAnimationFrame = null;
+                return;
+            }
+            
+            const currentTime = currentAudio.currentTime * 1000; // ミリ秒に変換
+            const activeIndex = subtitleState.preparedSubtitles.findIndex(
+                sub => currentTime >= sub.startTime && currentTime < sub.endTime
+            );
+            
+            // マーカーを更新（activeIndexが-1の場合も処理）
+            if (activeIndex !== subtitleState.activeIndex) {
+                subtitleState.activeIndex = activeIndex;
+                if (activeIndex >= 0) {
+                    updateSubtitleHighlight(activeIndex);
                 } else {
-                    // 最後の字幕の場合は、設定された時間後にタイマーを停止
-                    subtitleInterval = setTimeout(() => {
-                        stopSubtitleTimer();
-                    }, duration);
-                }
-            } else {
-                stopSubtitleTimer();
-            }
-        }
-
-        // 字幕タイマーを停止する関数
-        function stopSubtitleTimer() {
-            if (subtitleInterval) {
-                clearTimeout(subtitleInterval);
-                subtitleInterval = null;
-            }
-            subtitlePauseTime = null;
-            subtitleRemainingTime = null;
-            subtitleTotalElapsed = 0;
-            subtitleState = null;
-        }
-
-        // 字幕タイマーを一時停止する関数
-        function pauseSubtitleTimer() {
-            if (subtitleInterval && subtitleState) {
-                const now = Date.now();
-                const elapsed = now - subtitleState.startTime;
-                subtitleRemainingTime = Math.max(0, subtitleState.duration - elapsed); // 負の値を防ぐ
-                subtitlePauseTime = now;
-                // 累積経過時間を更新（一時停止前の経過時間を加算）
-                subtitleTotalElapsed += elapsed;
-                clearTimeout(subtitleInterval);
-                subtitleInterval = null;
-            }
-        }
-
-        // 字幕タイマーを再開する関数
-        function resumeSubtitleTimer() {
-            if (subtitleState && subtitleRemainingTime !== null && subtitleRemainingTime >= 0) {
-                // 残り時間から再開
-                subtitleState.startTime = Date.now();
-                
-                if (subtitleRemainingTime > 0) {
-                    // 残り時間がある場合は、その時間後に次の字幕を表示
-                    subtitleInterval = setTimeout(() => {
-                        // 次の字幕を表示する処理
-                        if (subtitleState && subtitleState.currentIndex + 1 < subtitleState.array.length) {
-                            subtitleState.currentIndex++;
-                            const nextItem = subtitleState.array[subtitleState.currentIndex];
-                            const getSubtitleText = (item) => {
-                                if (typeof item === 'string') return item;
-                                return item && item.text ? item.text : '';
-                            };
-                            const getSubtitleDuration = (item) => {
-                                if (typeof item === 'string') return 2000;
-                                return item && item.duration ? item.duration : 2000;
-                            };
-                            
-                            const text = getSubtitleText(nextItem);
-                            const duration = getSubtitleDuration(nextItem);
-                            
-                            updateSubtitle(text);
-                            subtitleState.startTime = Date.now();
-                            subtitleState.duration = duration;
-                            
-                            // 次の字幕がある場合は、設定された時間後に次の字幕を表示
-                            if (subtitleState.currentIndex + 1 < subtitleState.array.length) {
-                                subtitleInterval = setTimeout(() => {
-                                    showNextSubtitleGlobal();
-                                }, duration);
-                            } else {
-                                // 最後の字幕の場合は、設定された時間後にタイマーを停止
-                                subtitleInterval = setTimeout(() => {
-                                    stopSubtitleTimer();
-                                }, duration);
-                            }
-                        } else {
-                            stopSubtitleTimer();
-                        }
-                    }, subtitleRemainingTime);
-                } else {
-                    // 残り時間が0以下の場合は、すぐに次の字幕を表示
-                    if (subtitleState && subtitleState.currentIndex + 1 < subtitleState.array.length) {
-                        subtitleState.currentIndex++;
-                        const nextItem = subtitleState.array[subtitleState.currentIndex];
-                        const getSubtitleText = (item) => {
-                            if (typeof item === 'string') return item;
-                            return item && item.text ? item.text : '';
-                        };
-                        const getSubtitleDuration = (item) => {
-                            if (typeof item === 'string') return 2000;
-                            return item && item.duration ? item.duration : 2000;
-                        };
-                        
-                        const text = getSubtitleText(nextItem);
-                        const duration = getSubtitleDuration(nextItem);
-                        
-                        updateSubtitle(text);
-                        subtitleState.startTime = Date.now();
-                        subtitleState.duration = duration;
-                        
-                        // 次の字幕がある場合は、設定された時間後に次の字幕を表示
-                        if (subtitleState.currentIndex + 1 < subtitleState.array.length) {
-                            subtitleInterval = setTimeout(() => {
-                                showNextSubtitleGlobal();
-                            }, duration);
-                        } else {
-                            subtitleInterval = setTimeout(() => stopSubtitleTimer(), duration);
-                        }
-                    } else {
-                        stopSubtitleTimer();
+                    // どの字幕にも該当しない場合は、全字幕を通常表示
+                    const preparedSubtitles = subtitleState.preparedSubtitles;
+                    const fullText = preparedSubtitles.map(sub => sub.text).join('');
+                    if (els.subtitleText) {
+                        els.subtitleText.innerHTML = fullText;
                     }
                 }
-                
-                subtitleRemainingTime = null;
-                subtitlePauseTime = null;
+            }
+            
+            // 再生中は継続して監視（一時停止中でない限り）
+            if (isPlaying && !isPaused) {
+                subtitleAnimationFrame = requestAnimationFrame(updateSubtitleMarker);
+            } else {
+                subtitleAnimationFrame = null;
             }
         }
+
+        // 字幕のハイライトを更新（1行表示内でマーカーを表示）
+        function updateSubtitleHighlight(activeIndex) {
+            if (!els.subtitleText || !subtitleState || activeIndex < 0) return;
+            
+            const preparedSubtitles = subtitleState.preparedSubtitles;
+            let html = '';
+            
+            preparedSubtitles.forEach((sub, index) => {
+                const text = sub.text;
+                if (index === activeIndex) {
+                    // 現在話している部分をマーカーで囲む
+                    html += `<span class="subtitle-marker">${text}</span>`;
+                } else {
+                    // それ以外は通常表示
+                    html += `<span>${text}</span>`;
+                }
+            });
+            
+            els.subtitleText.innerHTML = html;
+        }
+
+
+        // 字幕表示を開始（1行表示＋マーカー方式）
+        function startSubtitleDisplay(subtitleArray) {
+            // 既存のアニメーションフレームをキャンセル
+            stopSubtitleDisplay();
+            
+            if (!subtitleArray || subtitleArray.length === 0) {
+                if (els.subtitleText) {
+                    els.subtitleText.innerHTML = '<span class="opacity-60">字幕データがありません</span>';
+                }
+                return;
+            }
+
+            // 字幕データを準備
+            const preparedSubtitles = prepareSubtitles(subtitleArray);
+            
+            // 字幕状態を初期化
+            subtitleState = {
+                preparedSubtitles: preparedSubtitles,
+                activeIndex: -1
+            };
+
+            // 字幕を1行で表示
+            renderSubtitleWithMarker(preparedSubtitles);
+
+            // マーカー更新は音声再生開始時に開始されるため、ここでは開始しない
+            // （playAudioWrapper内で音声再生開始後にupdateSubtitleMarker()が呼ばれる）
+        }
+
+        // 字幕表示を停止
+        function stopSubtitleDisplay() {
+            if (subtitleAnimationFrame) {
+                cancelAnimationFrame(subtitleAnimationFrame);
+                subtitleAnimationFrame = null;
+            }
+            subtitleState = null;
+            if (els.subtitleText) {
+                els.subtitleText.innerHTML = '<span class="opacity-60">再生ボタンを押して開始</span>';
+            }
+        }
+
 
         // メインロジック：会話シーケンスの開始
         async function startSequence() {
             isPlaying = true;
             updatePlayBtnUI(true);
-            updateSubtitle("準備中...", true);
+            stopSubtitleDisplay(); // 既存の字幕表示をクリア
 
             const assets = getAssetPaths(currentSlide);
             if (!assets) {
@@ -866,26 +811,23 @@
                 await wait(300);
                 if (!isPlaying && !isAutoPlayMode) return;
                 
-                // 男性の字幕タイマーを開始
-                if (Array.isArray(slideSubtitles.man)) {
-                    startSubtitleTimer(slideSubtitles.man);
-                } else {
-                    updateSubtitle(slideSubtitles.man || "");
+                // 男性の字幕を全表示＋マーカー方式で開始
+                if (Array.isArray(slideSubtitles.man) && slideSubtitles.man.length > 0) {
+                    startSubtitleDisplay(slideSubtitles.man);
                 }
                 currentTalkingCharacter = 'man'; // 現在話しているキャラクターを記録
                 setCharacterState('man', 'talking');
                 
                 await playAudioWrapper(assets.manAudio, 'man');
                 
-                // 音声再生終了時に字幕タイマーを停止
-                stopSubtitleTimer();
+                // 音声再生終了時に字幕表示を停止
+                stopSubtitleDisplay();
                 currentTalkingCharacter = null; // 話し終わったのでリセット 
                 
                 if (!isPlaying && !isAutoPlayMode) return;
                 setCharacterState('man', 'silent');
                 
-                // 待機中は字幕をクリア
-                updateSubtitle("", true);
+                // 待機中
                 await wait(500);
                 if (!isPlaying && !isAutoPlayMode) return;
 
@@ -893,26 +835,21 @@
                 await wait(300);
                 if (!isPlaying && !isAutoPlayMode) return;
                 
-                // 女性の字幕タイマーを開始
-                if (Array.isArray(slideSubtitles.woman)) {
-                    startSubtitleTimer(slideSubtitles.woman);
-                } else {
-                    updateSubtitle(slideSubtitles.woman || "");
+                // 女性の字幕を全表示＋マーカー方式で開始
+                if (Array.isArray(slideSubtitles.woman) && slideSubtitles.woman.length > 0) {
+                    startSubtitleDisplay(slideSubtitles.woman);
                 }
                 currentTalkingCharacter = 'woman'; // 現在話しているキャラクターを記録
                 setCharacterState('woman', 'talking');
                 
                 await playAudioWrapper(assets.womanAudio, 'woman');
                 
-                // 音声再生終了時に字幕タイマーを停止
-                stopSubtitleTimer();
+                // 音声再生終了時に字幕表示を停止
+                stopSubtitleDisplay();
                 currentTalkingCharacter = null; // 話し終わったのでリセット
 
                 if (!isPlaying && !isAutoPlayMode) return;
                 setCharacterState('woman', 'silent');
-                
-                // 字幕をクリア
-                updateSubtitle("再生完了", true);
                 
                 // 自動再生モードの場合は自動的に次のスライドに進む
                 if (isAutoPlayMode) {
@@ -972,7 +909,15 @@
                         currentAudio.currentTime = 0;
                         
                         // 再生開始
-                        currentAudio.play().catch(e => {
+                        currentAudio.play().then(() => {
+                            // 音声再生開始時に字幕マーカー更新を開始
+                            // 少し遅延を入れて、音声再生が確実に開始された後にマーカー更新を開始
+                            setTimeout(() => {
+                                if (subtitleState && currentAudio && !currentAudio.paused) {
+                                    updateSubtitleMarker();
+                                }
+                            }, 50);
+                        }).catch(e => {
                             console.warn("Autoplay blocked or file error", e);
                             simulateAudio(type).then(resolve);
                         });
