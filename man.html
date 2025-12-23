@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>パーツ分割アニメーション</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #99cc00; /* 元画像の背景色に合わせています */
+        }
+
+        /* キャラクター全体のコンテナ */
+        .character-container {
+            position: relative; /* パーツ配置の基準点 */
+            width: 320px;  /* ベース画像の幅に合わせて調整 */
+            height: 450px; /* ベース画像の高さに合わせて調整 */
+        }
+
+        /* 1. ベース画像（のっぺらぼう） */
+        .base-image {
+            width: 100%;
+            height: auto;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1; /* 一番後ろ */
+        }
+
+        /* 共通パーツスタイル */
+        .parts-layer {
+            position: absolute;
+            background-repeat: no-repeat;
+            background-size: contain;
+            z-index: 2; /* ベースより前 */
+        }
+
+        /* --- 2. 目のレイヤー設定 --- */
+        .eyes {
+            /* 【重要】目のパーツの位置とサイズを調整してください */
+            top: 140px;   /* 上からの位置 */
+            left: 117px;   /* 左からの位置 */
+            width: 90px; /* パーツ画像の幅 */
+            height: 40px; /* パーツ画像の高さ */
+            background-image: url('data/eyes/normal.png'); /* 常時開眼 */
+        }
+
+        /* --- 3. 口のレイヤー設定 --- */
+        .mouth {
+            /* 【重要】口のパーツの位置とサイズを調整してください */
+            top: 190px;   /* 上からの位置 */
+            left: 147px;  /* 左からの位置 */
+            width: 30px;  /* パーツ画像の幅 */
+            height: 50px; /* パーツ画像の高さ */
+            background-image: url('data/mouth/closed.png'); /* デフォルトは閉口 */
+        }
+
+        /* 話している状態 */
+        .mouth.talking {
+            animation: lip-sync 1s infinite steps(1);
+        }
+
+        .mouth-closed {
+            top: 190px;   /* 上からの位置 */
+            left: 147px;  /* 左からの位置 */
+            width: 30px;  /* パーツ画像の幅 */
+            height: 50px; /* パーツ画像の高さ */
+
+            /* 口のアニメーション：不規則なリピート */
+            animation: lip-sync-closed 1.5s infinite steps(1);
+        }
+
+
+        /* ====== アニメーションキーフレーム ====== */
+
+        /* 目のアニメーション（1回の瞬き。JSで発火） */
+        @keyframes eye-blink-once {
+            0%, 45%  { background-image: url('data/eyes/normal.png'); }
+            50%, 80% { background-image: url('data/eyes/closed.png'); }
+            85%,100% { background-image: url('data/eyes/normal.png'); }
+        }
+
+        /* 瞬き中に付与されるクラス */
+        .eyes.blinking {
+            animation: eye-blink-once 0.24s steps(1) 0s 1;
+        }
+
+        /* 口のアニメーション（ランダム風なリップシンク） */
+        @keyframes lip-sync {
+            0%   { background-image: url('data/mouth/closed.png'); }
+            10%  { background-image: url('data/mouth/medium.png'); }
+            25%  { background-image: url('data/mouth/wide.png'); }
+            40%  { background-image: url('data/mouth/shout.png'); }
+            55%  { background-image: url('data/mouth/medium.png'); } /* 時々強調 */
+            70%  { background-image: url('data/mouth/closed.png'); }
+            85%  { background-image: url('data/mouth/medium.png'); }
+            100% { background-image: url('data/mouth/closed.png'); }
+        }
+
+        /* しゃべっていない時の軽い動き（呼吸感） */
+        @keyframes mouth-silent {
+            0%, 20%   { background-image: url('data/mouth/closed.png'); }
+            25%       { background-image: url('data/mouth/medium.png'); }
+            35%, 60%  { background-image: url('data/mouth/closed.png'); }
+            65%       { background-image: url('data/mouth/medium.png'); }
+            75%, 100% { background-image: url('data/mouth/closed.png'); }
+        }
+
+        /* プリロード */
+        .preload-images {
+            position: absolute; width: 0; height: 0; overflow: hidden; z-index: -1;
+            content: url('data/base.png')
+                     url('data/eyes/normal.png') url('data/eyes/closed.png')
+                     url('data/mouth/closed.png') url('data/mouth/medium.png') url('data/mouth/wide.png') url('data/mouth/shout.png');
+        }
+    </style>
+</head>
+<body>
+
+    <div class="character-container">
+        <img src="data/base.png" alt="ベース" class="base-image">
+        
+        <div class="parts-layer eyes"></div>
+        
+        <div class="parts-layer mouth silent" id="mouth"></div>
+    </div>
+
+    <!-- デバッグ用：状態切替ボタン -->
+    <div style="position: absolute; bottom: 40px; display: flex; gap: 12px;">
+        <button id="btn-talk" style="padding: 8px 12px; font-size: 14px;">しゃべる</button>
+        <button id="btn-silent" style="padding: 8px 12px; font-size: 14px;">だまる</button>
+    </div>
+
+    <script>
+        // シンプルな状態トグル（テスト用）
+        const mouthEl = document.getElementById('mouth');
+        const btnTalk = document.getElementById('btn-talk');
+        const btnSilent = document.getElementById('btn-silent');
+        const eyesEl = document.querySelector('.eyes');
+
+        // 人間っぽいランダム瞬き
+        const MIN_BLINK = 3200; // ms 少し間隔を伸ばす
+        const MAX_BLINK = 9000; // ms
+
+        function doBlink(isDouble = false) {
+            eyesEl.classList.add('blinking');
+            setTimeout(() => {
+                eyesEl.classList.remove('blinking');
+                if (isDouble) {
+                    // 二回瞬き：少し間を空けてもう一度
+                    setTimeout(() => {
+                        eyesEl.classList.add('blinking');
+                        setTimeout(() => eyesEl.classList.remove('blinking'), 180);
+                    }, 120);
+                }
+            }, 180);
+        }
+
+        function scheduleBlink() {
+            const next = Math.random() * (MAX_BLINK - MIN_BLINK) + MIN_BLINK;
+            setTimeout(() => {
+                const doubleBlink = Math.random() < 0.18; // たまに二回瞬き
+                doBlink(doubleBlink);
+                scheduleBlink();
+            }, next);
+        }
+
+        function setTalking(isTalking) {
+            if (isTalking) {
+                mouthEl.classList.add('talking');
+                mouthEl.classList.remove('silent');
+            } else {
+                mouthEl.classList.add('silent');
+                mouthEl.classList.remove('talking');
+            }
+        }
+
+        btnTalk.addEventListener('click', () => setTalking(true));
+        btnSilent.addEventListener('click', () => setTalking(false));
+
+        // 初期化
+        scheduleBlink();
+    </script>
+
+    <div class="preload-images"></div>
+</body>
+</html>
