@@ -18,6 +18,70 @@
             bottom: 5%; /* 少し底上げして配置 */
             transition: transform 0.3s ease;
         }
+      .man-avatar {
+        position: relative;
+        width: 320px;
+        height: 450px;
+        max-height: 50vh;
+      }
+      .man-base {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .parts-layer {
+        position: absolute;
+        background-repeat: no-repeat;
+        background-size: contain;
+        z-index: 2;
+      }
+      /* 目と口の位置調整（man.html と同じ値） */
+      #man-eyes {
+        top: 140px;
+        left: 117px;
+        width: 90px;
+        height: 40px;
+        background-image: url("data/eyes/normal.png");
+      }
+      #man-mouth {
+        top: 190px;
+        left: 147px;
+        width: 30px;
+        height: 50px;
+        background-image: url("data/mouth/closed.png");
+      }
+      /* 瞬き */
+      @keyframes eye-blink-once {
+        0%, 45%  { background-image: url("data/eyes/normal.png"); }
+        50%, 80% { background-image: url("data/eyes/closed.png"); }
+        85%,100% { background-image: url("data/eyes/normal.png"); }
+      }
+      .blinking {
+        animation: eye-blink-once 0.24s steps(1) 0s 1;
+      }
+      /* 口パク（話す） */
+      @keyframes lip-sync {
+        0%   { background-image: url("data/mouth/closed.png"); }
+        10%  { background-image: url("data/mouth/medium.png"); }
+        25%  { background-image: url("data/mouth/wide.png"); }
+        40%  { background-image: url("data/mouth/shout.png"); }
+        55%  { background-image: url("data/mouth/medium.png"); }
+        70%  { background-image: url("data/mouth/closed.png"); }
+        85%  { background-image: url("data/mouth/medium.png"); }
+        100% { background-image: url("data/mouth/closed.png"); }
+      }
+      /* 口パク（待機） */
+      @keyframes mouth-silent {
+        0%, 100%   { background-image: url("data/mouth/closed.png"); }
+      }
+      #man-mouth.talking {
+        animation: lip-sync 1s infinite steps(1);
+      }
+      #man-mouth.silent {
+        animation: mouth-silent 3s infinite steps(1);
+      }
         .character-img {
             max-height: 25vh; /* 高さを画面の25%に制限 */
             width: auto;
@@ -102,10 +166,11 @@
 
             <!-- 左側：男性キャラクターエリア -->
             <div class="character-container left-[15%] z-10" id="man-container">
-                <!-- 静止画 (PNG) -->
-                <img id="man-static" src="" alt="Man Static" class="character-img block">
-                <!-- 動画 (GIF) -->
-                <img id="man-anim" src="" alt="Man Talking" class="character-img hidden">
+                <div class="man-avatar">
+                  <img id="man-base" src="" alt="Man Base" class="man-base">
+                  <div id="man-eyes" class="parts-layer"></div>
+                  <div id="man-mouth" class="parts-layer silent"></div>
+                </div>
                 
                 <!-- 話者インジケーター -->
                 <div id="man-bubble" class="absolute -top-12 -right-8 bg-white dark:bg-gray-700 px-4 py-2 rounded-2xl rounded-bl-none shadow-lg opacity-0 transition-opacity duration-300 transform scale-90 border border-gray-200 dark:border-gray-600">
@@ -217,8 +282,9 @@
 
         // DOM要素
         const els = {
-            manStatic: document.getElementById('man-static'),
-            manAnim: document.getElementById('man-anim'),
+            manBase: document.getElementById('man-base'),
+            manEyes: document.getElementById('man-eyes'),
+            manMouth: document.getElementById('man-mouth'),
             womanStatic: document.getElementById('woman-static'),
             womanAnim: document.getElementById('woman-anim'),
             manBubble: document.getElementById('man-bubble'),
@@ -245,6 +311,7 @@
             updateSlideUI();
             setupEventListeners();
             initTheme();
+            startManBlinkLoop();
             // 最初のスライドの音声をプリロード
             preloadNextSlideAudios();
         }
@@ -304,6 +371,41 @@
                     togglePlay();
                 }
             });
+        }
+
+        /**
+         * 男性キャラクターの瞬き制御（man.html の挙動を移植）
+         */
+        const MAN_MIN_BLINK = 3200;
+        const MAN_MAX_BLINK = 9000;
+
+        function triggerManBlink(isDouble = false) {
+            if (!els.manEyes) return;
+            els.manEyes.classList.add('blinking');
+            setTimeout(() => {
+                els.manEyes.classList.remove('blinking');
+                if (isDouble) {
+                    setTimeout(() => {
+                        els.manEyes.classList.add('blinking');
+                        setTimeout(() => els.manEyes.classList.remove('blinking'), 180);
+                    }, 120);
+                }
+            }, 180);
+        }
+
+        function scheduleManBlink() {
+            const next = Math.random() * (MAN_MAX_BLINK - MAN_MIN_BLINK) + MAN_MIN_BLINK;
+            setTimeout(() => {
+                const doubleBlink = Math.random() < 0.18;
+                triggerManBlink(doubleBlink);
+                scheduleManBlink();
+            }, next);
+        }
+
+        function startManBlinkLoop() {
+            // 即時1回実行してからループを開始
+            triggerManBlink(false);
+            scheduleManBlink();
         }
 
         // ファイル名生成ユーティリティ（新しい設定構造に対応）
@@ -420,8 +522,7 @@
             
             els.slideIndicator.textContent = slideStr;
             
-            els.manStatic.src = assets.manImgStatic;
-            els.manAnim.src = assets.manImgAnim;
+            setManBaseImage(assets);
             els.womanStatic.src = assets.womanImgStatic;
             els.womanAnim.src = assets.womanImgAnim;
             
@@ -478,21 +579,60 @@
 
         // キャラクター状態切り替え関数
         function setCharacterState(character, state) {
-            const staticImg = character === 'man' ? els.manStatic : els.womanStatic;
-            const animImg = character === 'man' ? els.manAnim : els.womanAnim;
             const bubble = character === 'man' ? els.manBubble : els.womanBubble;
 
-            if (state === 'talking') {
-                staticImg.classList.add('hidden');
-                animImg.classList.remove('hidden');
-                bubble.style.opacity = '1';
-                bubble.style.transform = 'scale(1)';
+            if (character === 'man') {
+                if (els.manMouth) {
+                    els.manMouth.classList.toggle('talking', state === 'talking');
+                    els.manMouth.classList.toggle('silent', state !== 'talking');
+                }
             } else {
-                staticImg.classList.remove('hidden');
-                animImg.classList.add('hidden');
-                bubble.style.opacity = '0';
-                bubble.style.transform = 'scale(0.9)';
+                const staticImg = els.womanStatic;
+                const animImg = els.womanAnim;
+                if (state === 'talking') {
+                    staticImg.classList.add('hidden');
+                    animImg.classList.remove('hidden');
+                    bubble.style.opacity = '1';
+                    bubble.style.transform = 'scale(1)';
+                } else {
+                    staticImg.classList.remove('hidden');
+                    animImg.classList.add('hidden');
+                    bubble.style.opacity = '0';
+                    bubble.style.transform = 'scale(0.9)';
+                }
             }
+
+            if (bubble) {
+                if (state === 'talking') {
+                    bubble.style.opacity = '1';
+                    bubble.style.transform = 'scale(1)';
+                } else {
+                    bubble.style.opacity = '0';
+                    bubble.style.transform = 'scale(0.9)';
+                }
+            }
+        }
+
+        // base.png が無い場合は man.png を使う（自動フォールバック）
+        function setManBaseImage(assets) {
+            if (!els.manBase) return;
+            const fallback = assets.manImgStatic;
+            if (!fallback) {
+                els.manBase.src = '';
+                return;
+            }
+
+            // man.png → base.png を試し、失敗したら man.png のまま使う
+            const candidate = fallback.replace(/man\.png$/i, 'base.png');
+            if (candidate === fallback) {
+                els.manBase.src = fallback;
+                return;
+            }
+
+            const img = new Image();
+            img.onload = () => { els.manBase.src = candidate; };
+            img.onerror = () => { els.manBase.src = fallback; };
+            img.src = candidate;
         }
 
         // 自動再生モードの切り替え
