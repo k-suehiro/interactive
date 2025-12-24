@@ -82,6 +82,65 @@
       #man-mouth.silent {
         animation: mouth-silent 3s infinite steps(1);
       }
+      /* 女性キャラクター用スタイル */
+      .woman-avatar {
+        position: relative;
+        width: 320px;
+        height: 450px;
+        max-height: 50vh;
+      }
+      .woman-base {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      /* 女性キャラクターの目と口の位置調整（woman.html と同じ値） */
+      #woman-eyes {
+        top: 125px;
+        left: 114px;
+        width: 90px;
+        height: 40px;
+        background-image: url("data/woman-eyes/normal.png");
+      }
+      #woman-mouth {
+        top: 172px;
+        left: 145px;
+        width: 30px;
+        height: 50px;
+        background-image: url("data/woman-mouth/closed.png");
+      }
+      /* 女性キャラクターの瞬き */
+      @keyframes woman-eye-blink-once {
+        0%, 45%  { background-image: url("data/woman-eyes/normal.png"); }
+        50%, 80% { background-image: url("data/woman-eyes/closed.png"); }
+        85%,100% { background-image: url("data/woman-eyes/normal.png"); }
+      }
+      #woman-eyes.blinking {
+        animation: woman-eye-blink-once 0.24s steps(1) 0s 1;
+      }
+      /* 女性キャラクターの口パク（話す） */
+      @keyframes woman-lip-sync {
+        0%   { background-image: url("data/woman-mouth/closed.png"); }
+        10%  { background-image: url("data/woman-mouth/medium.png"); }
+        25%  { background-image: url("data/woman-mouth/wide.png"); }
+        40%  { background-image: url("data/woman-mouth/shout.png"); }
+        55%  { background-image: url("data/woman-mouth/medium.png"); }
+        70%  { background-image: url("data/woman-mouth/closed.png"); }
+        85%  { background-image: url("data/woman-mouth/medium.png"); }
+        100% { background-image: url("data/woman-mouth/closed.png"); }
+      }
+      /* 女性キャラクターの口パク（待機） */
+      @keyframes woman-mouth-silent {
+        0%, 100%   { background-image: url("data/woman-mouth/closed.png"); }
+      }
+      #woman-mouth.talking {
+        animation: woman-lip-sync 1s infinite steps(1);
+      }
+      #woman-mouth.silent {
+        animation: woman-mouth-silent 3s infinite steps(1);
+      }
         .character-img {
             max-height: 25vh; /* 高さを画面の25%に制限 */
             width: auto;
@@ -173,20 +232,21 @@
                 </div>
                 
                 <!-- 話者インジケーター -->
-                <div id="man-bubble" class="absolute -top-12 -right-8 bg-white dark:bg-gray-700 px-4 py-2 rounded-2xl rounded-bl-none shadow-lg opacity-0 transition-opacity duration-300 transform scale-90 border border-gray-200 dark:border-gray-600">
+                <div id="man-bubble" class="absolute top-16 -right-8 bg-white dark:bg-gray-700 px-4 py-2 rounded-2xl rounded-bl-none shadow-lg opacity-0 transition-opacity duration-300 transform scale-90 border border-gray-200 dark:border-gray-600">
                     <p class="text-sm font-bold text-blue-600 dark:text-blue-400">Talking...</p>
                 </div>
             </div>
 
             <!-- 右側：女性キャラクターエリア -->
             <div class="character-container right-[15%] z-10" id="woman-container">
-                <!-- 静止画 (PNG) -->
-                <img id="woman-static" src="" alt="Woman Static" class="character-img block">
-                <!-- 動画 (GIF) -->
-                <img id="woman-anim" src="" alt="Woman Talking" class="character-img hidden">
-
+                <div class="woman-avatar">
+                  <img id="woman-base" src="" alt="Woman Base" class="woman-base">
+                  <div id="woman-eyes" class="parts-layer"></div>
+                  <div id="woman-mouth" class="parts-layer silent"></div>
+                </div>
+                
                 <!-- 話者インジケーター -->
-                <div id="woman-bubble" class="absolute -top-12 -left-8 bg-white dark:bg-gray-700 px-4 py-2 rounded-2xl rounded-br-none shadow-lg opacity-0 transition-opacity duration-300 transform scale-90 border border-gray-200 dark:border-gray-600">
+                <div id="woman-bubble" class="absolute top-16 -left-8 bg-white dark:bg-gray-700 px-4 py-2 rounded-2xl rounded-br-none shadow-lg opacity-0 transition-opacity duration-300 transform scale-90 border border-gray-200 dark:border-gray-600">
                     <p class="text-sm font-bold text-pink-600 dark:text-pink-400">Talking...</p>
                 </div>
             </div>
@@ -285,8 +345,9 @@
             manBase: document.getElementById('man-base'),
             manEyes: document.getElementById('man-eyes'),
             manMouth: document.getElementById('man-mouth'),
-            womanStatic: document.getElementById('woman-static'),
-            womanAnim: document.getElementById('woman-anim'),
+            womanBase: document.getElementById('woman-base'),
+            womanEyes: document.getElementById('woman-eyes'),
+            womanMouth: document.getElementById('woman-mouth'),
             manBubble: document.getElementById('man-bubble'),
             womanBubble: document.getElementById('woman-bubble'),
             slideIndicator: document.getElementById('slide-indicator'),
@@ -312,6 +373,7 @@
             setupEventListeners();
             initTheme();
             startManBlinkLoop();
+            startWomanBlinkLoop();
             // 最初のスライドの音声をプリロード
             preloadNextSlideAudios();
         }
@@ -406,6 +468,41 @@
             // 即時1回実行してからループを開始
             triggerManBlink(false);
             scheduleManBlink();
+        }
+
+        /**
+         * 女性キャラクターの瞬き制御（woman.html の挙動を移植）
+         */
+        const WOMAN_MIN_BLINK = 3200;
+        const WOMAN_MAX_BLINK = 9000;
+
+        function triggerWomanBlink(isDouble = false) {
+            if (!els.womanEyes) return;
+            els.womanEyes.classList.add('blinking');
+            setTimeout(() => {
+                els.womanEyes.classList.remove('blinking');
+                if (isDouble) {
+                    setTimeout(() => {
+                        els.womanEyes.classList.add('blinking');
+                        setTimeout(() => els.womanEyes.classList.remove('blinking'), 180);
+                    }, 120);
+                }
+            }, 180);
+        }
+
+        function scheduleWomanBlink() {
+            const next = Math.random() * (WOMAN_MAX_BLINK - WOMAN_MIN_BLINK) + WOMAN_MIN_BLINK;
+            setTimeout(() => {
+                const doubleBlink = Math.random() < 0.18;
+                triggerWomanBlink(doubleBlink);
+                scheduleWomanBlink();
+            }, next);
+        }
+
+        function startWomanBlinkLoop() {
+            // 即時1回実行してからループを開始
+            triggerWomanBlink(false);
+            scheduleWomanBlink();
         }
 
         // ファイル名生成ユーティリティ（新しい設定構造に対応）
@@ -523,8 +620,7 @@
             els.slideIndicator.textContent = slideStr;
             
             setManBaseImage(assets);
-            els.womanStatic.src = assets.womanImgStatic;
-            els.womanAnim.src = assets.womanImgAnim;
+            setWomanBaseImage(assets);
             
             if (assets.bg) {
                 els.sceneBg.style.backgroundImage = `url('${assets.bg}')`;
@@ -587,18 +683,9 @@
                     els.manMouth.classList.toggle('silent', state !== 'talking');
                 }
             } else {
-                const staticImg = els.womanStatic;
-                const animImg = els.womanAnim;
-                if (state === 'talking') {
-                    staticImg.classList.add('hidden');
-                    animImg.classList.remove('hidden');
-                    bubble.style.opacity = '1';
-                    bubble.style.transform = 'scale(1)';
-                } else {
-                    staticImg.classList.remove('hidden');
-                    animImg.classList.add('hidden');
-                    bubble.style.opacity = '0';
-                    bubble.style.transform = 'scale(0.9)';
+                if (els.womanMouth) {
+                    els.womanMouth.classList.toggle('talking', state === 'talking');
+                    els.womanMouth.classList.toggle('silent', state !== 'talking');
                 }
             }
 
@@ -632,6 +719,31 @@
             const img = new Image();
             img.onload = () => { els.manBase.src = candidate; };
             img.onerror = () => { els.manBase.src = fallback; };
+            img.src = candidate;
+        }
+
+        // woman-base.png が無い場合は wman.png を使う（自動フォールバック）
+        function setWomanBaseImage(assets) {
+            if (!els.womanBase) return;
+            const fallback = assets.womanImgStatic;
+            if (!fallback) {
+                els.womanBase.src = '';
+                return;
+            }
+
+            // woman-base.png を試し、失敗したら wman.png を使う（woman.html と同じ挙動）
+            // まず、wman.png から woman-base.png に変換を試す
+            let candidate = fallback.replace(/wman\.png$/i, 'woman-base.png');
+            
+            // 変換できなかった場合は、パスから直接 woman-base.png を構築
+            if (candidate === fallback) {
+                const basePath = DEFAULT_CONFIG.basePath;
+                candidate = basePath + 'data/woman-base.png';
+            }
+
+            const img = new Image();
+            img.onload = () => { els.womanBase.src = candidate; };
+            img.onerror = () => { els.womanBase.src = fallback; };
             img.src = candidate;
         }
 
