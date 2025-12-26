@@ -676,6 +676,7 @@
         // キャラクター状態切り替え関数
         function setCharacterState(character, state) {
             const bubble = character === 'man' ? els.manBubble : els.womanBubble;
+            const mouthEl = character === 'man' ? els.manMouth : els.womanMouth;
 
             if (character === 'man') {
                 if (els.manMouth) {
@@ -686,6 +687,18 @@
                 if (els.womanMouth) {
                     els.womanMouth.classList.toggle('talking', state === 'talking');
                     els.womanMouth.classList.toggle('silent', state !== 'talking');
+                }
+            }
+
+            // 話している時はアニメーションを停止（文字ベースの口パクを使用）
+            // 話していない時はアニメーションを再開
+            if (mouthEl) {
+                if (state === 'talking') {
+                    // アニメーションを停止（updateMouthShapeで直接画像を更新）
+                    mouthEl.style.animation = 'none';
+                } else {
+                    // アニメーションを再開
+                    mouthEl.style.animation = '';
                 }
             }
 
@@ -895,6 +908,179 @@
             }
         }
 
+        /**
+         * 日本語文字から母音を抽出する関数
+         */
+        function getVowelFromChar(char) {
+            // ひらがな・カタカナの母音判定
+            const hiraganaVowels = {
+                'あ': 'a', 'い': 'i', 'う': 'u', 'え': 'e', 'お': 'o',
+                'か': 'a', 'き': 'i', 'く': 'u', 'け': 'e', 'こ': 'o',
+                'が': 'a', 'ぎ': 'i', 'ぐ': 'u', 'げ': 'e', 'ご': 'o',
+                'さ': 'a', 'し': 'i', 'す': 'u', 'せ': 'e', 'そ': 'o',
+                'ざ': 'a', 'じ': 'i', 'ず': 'u', 'ぜ': 'e', 'ぞ': 'o',
+                'た': 'a', 'ち': 'i', 'つ': 'u', 'て': 'e', 'と': 'o',
+                'だ': 'a', 'ぢ': 'i', 'づ': 'u', 'で': 'e', 'ど': 'o',
+                'な': 'a', 'に': 'i', 'ぬ': 'u', 'ね': 'e', 'の': 'o',
+                'は': 'a', 'ひ': 'i', 'ふ': 'u', 'へ': 'e', 'ほ': 'o',
+                'ば': 'a', 'び': 'i', 'ぶ': 'u', 'べ': 'e', 'ぼ': 'o',
+                'ぱ': 'a', 'ぴ': 'i', 'ぷ': 'u', 'ぺ': 'e', 'ぽ': 'o',
+                'ま': 'a', 'み': 'i', 'む': 'u', 'め': 'e', 'も': 'o',
+                'や': 'a', 'ゆ': 'u', 'よ': 'o',
+                'ら': 'a', 'り': 'i', 'る': 'u', 'れ': 'e', 'ろ': 'o',
+                'わ': 'a', 'を': 'o', 'ん': null, // んは母音なし
+                'ゃ': 'a', 'ゅ': 'u', 'ょ': 'o', // 拗音
+                'っ': null, // 促音
+            };
+            
+            const katakanaVowels = {
+                'ア': 'a', 'イ': 'i', 'ウ': 'u', 'エ': 'e', 'オ': 'o',
+                'カ': 'a', 'キ': 'i', 'ク': 'u', 'ケ': 'e', 'コ': 'o',
+                'ガ': 'a', 'ギ': 'i', 'グ': 'u', 'ゲ': 'e', 'ゴ': 'o',
+                'サ': 'a', 'シ': 'i', 'ス': 'u', 'セ': 'e', 'ソ': 'o',
+                'ザ': 'a', 'ジ': 'i', 'ズ': 'u', 'ゼ': 'e', 'ゾ': 'o',
+                'タ': 'a', 'チ': 'i', 'ツ': 'u', 'テ': 'e', 'ト': 'o',
+                'ダ': 'a', 'ヂ': 'i', 'ヅ': 'u', 'デ': 'e', 'ド': 'o',
+                'ナ': 'a', 'ニ': 'i', 'ヌ': 'u', 'ネ': 'e', 'ノ': 'o',
+                'ハ': 'a', 'ヒ': 'i', 'フ': 'u', 'ヘ': 'e', 'ホ': 'o',
+                'バ': 'a', 'ビ': 'i', 'ブ': 'u', 'ベ': 'e', 'ボ': 'o',
+                'パ': 'a', 'ピ': 'i', 'プ': 'u', 'ペ': 'e', 'ポ': 'o',
+                'マ': 'a', 'ミ': 'i', 'ム': 'u', 'メ': 'e', 'モ': 'o',
+                'ヤ': 'a', 'ユ': 'u', 'ヨ': 'o',
+                'ラ': 'a', 'リ': 'i', 'ル': 'u', 'レ': 'e', 'ロ': 'o',
+                'ワ': 'a', 'ヲ': 'o', 'ン': null, // ンは母音なし
+                'ャ': 'a', 'ュ': 'u', 'ョ': 'o', // 拗音
+                'ッ': null, // 促音
+            };
+            
+            // ひらがなをチェック
+            if (hiraganaVowels.hasOwnProperty(char)) {
+                return hiraganaVowels[char];
+            }
+            
+            // カタカナをチェック
+            if (katakanaVowels.hasOwnProperty(char)) {
+                return katakanaVowels[char];
+            }
+            
+            // 英数字や記号の場合はnull（閉じた口）
+            return null;
+        }
+
+        /**
+         * 母音を口の画像パスにマッピング（あいうえお専用画像を使用）
+         */
+        function getMouthImageFromVowel(vowel, character) {
+            const basePath = character === 'man' ? 'data/mouth/' : 'data/woman-mouth/';
+            
+            if (!vowel) {
+                return basePath + 'closed.png';
+            }
+            
+            // あいうえお専用画像を使用
+            return basePath + vowel + '.png';
+        }
+
+        /**
+         * 文字が漢字かどうかを判定
+         */
+        function isKanji(char) {
+            const code = char.charCodeAt(0);
+            // CJK統合漢字の範囲: U+4E00～U+9FFF
+            // CJK統合漢字拡張A: U+3400～U+4DBF
+            return (code >= 0x4E00 && code <= 0x9FFF) || (code >= 0x3400 && code <= 0x4DBF);
+        }
+
+        /**
+         * 漢字の場合、前後の文字の母音を参考にする
+         */
+        function getVowelForKanji(characters, index) {
+            // 前の文字の母音を優先的に使用
+            for (let i = index - 1; i >= 0; i--) {
+                const prevVowel = getVowelFromChar(characters[i]);
+                if (prevVowel !== null) {
+                    return prevVowel;
+                }
+            }
+            
+            // 前の文字も母音がない場合は、次の文字の母音を使用
+            for (let i = index + 1; i < characters.length; i++) {
+                const nextVowel = getVowelFromChar(characters[i]);
+                if (nextVowel !== null) {
+                    return nextVowel;
+                }
+            }
+            
+            // どちらもない場合は閉じた口
+            return null;
+        }
+
+        /**
+         * 句読点かどうかを判定
+         */
+        function isPunctuation(char) {
+            const punctuationMarks = ['、', '。', '，', '．', ',', '.', '！', '？', '!', '?', '…', '⋯', '：', '；', ':', ';'];
+            return punctuationMarks.includes(char);
+        }
+
+        /**
+         * 字幕テキストを文字単位に分割し、各文字のタイミングを計算
+         * リップシンク用に、読み方（ひらがな）テキストを使用
+         */
+        function prepareSubtitleCharacters(subtitleText, readingText, startTime, endTime) {
+            // リップシンク用には読み方（ひらがな）を使用
+            // readingTextがない場合は、subtitleTextをそのまま使用
+            const lipSyncText = readingText || subtitleText;
+            const characters = Array.from(lipSyncText); // サロゲートペア対応
+            const duration = endTime - startTime;
+            
+            // 音声と口パクの同期を改善するための調整
+            // 全体を少し遅らせて、音声の開始に合わせる（durationの5%を遅延として使用）
+            const lipSyncDelay = duration * 0.05; // durationの5%を遅延
+            const adjustedStartTime = startTime + lipSyncDelay;
+            const adjustedDuration = duration - lipSyncDelay; // 遅延分を引いた時間を使用
+            
+            // 句読点の表示時間を長くする倍率
+            const punctuationMultiplier = 2.5; // 句読点は通常の2.5倍の時間を表示
+            
+            // 各文字の基本表示時間を計算（句読点を考慮）
+            let totalWeight = 0;
+            const charWeights = characters.map(char => {
+                const weight = isPunctuation(char) ? punctuationMultiplier : 1;
+                totalWeight += weight;
+                return weight;
+            });
+            
+            // 各文字のタイミングを計算
+            let currentTime = adjustedStartTime;
+            return characters.map((char, index) => {
+                const weight = charWeights[index];
+                const charDuration = (adjustedDuration * weight) / totalWeight;
+                const charStartTime = currentTime;
+                
+                // 最後の文字の場合は、確実にendTimeに合わせる（浮動小数点誤差を考慮）
+                let charEndTime;
+                if (index === characters.length - 1) {
+                    // 最後の文字は確実にendTimeに合わせる
+                    charEndTime = endTime;
+                } else {
+                    charEndTime = currentTime + charDuration;
+                }
+                
+                currentTime = charEndTime; // 次の文字の開始時間を更新
+                
+                // ひらがな・カタカナから直接母音を取得
+                const vowel = getVowelFromChar(char);
+                
+                return {
+                    char: char,
+                    vowel: vowel,
+                    startTime: charStartTime,
+                    endTime: charEndTime
+                };
+            });
+        }
+
         // 字幕データから累積時間を計算して準備
         function prepareSubtitles(subtitleArray) {
             if (!subtitleArray || subtitleArray.length === 0) {
@@ -904,14 +1090,23 @@
             let currentTime = 0;
             return subtitleArray.map(item => {
                 const duration = typeof item === 'string' ? 2000 : (item.duration || 2000);
+                const text = typeof item === 'string' ? item : item.text;
+                // readingフィールドがあればそれを使用、なければtextをそのまま使用
+                const reading = typeof item === 'string' ? null : (item.reading || null);
                 const startTime = currentTime;
                 const endTime = currentTime + duration;
+                
+                // 文字単位の情報を準備（リップシンク用に読み方を使用）
+                const characters = prepareSubtitleCharacters(text, reading, startTime, endTime);
+                
                 currentTime = endTime;
                 return {
-                    text: typeof item === 'string' ? item : item.text,
+                    text: text,
+                    reading: reading, // 読み方を保持
                     duration: duration,
                     startTime: startTime,
-                    endTime: endTime
+                    endTime: endTime,
+                    characters: characters // 文字単位の情報を追加（リップシンク用）
                 };
             });
         }
@@ -928,6 +1123,43 @@
             // 全字幕を結合して1行のテキストとして表示
             const fullText = preparedSubtitles.map(sub => sub.text).join('');
             els.subtitleText.innerHTML = fullText;
+        }
+
+        /**
+         * 現在の文字に基づいて口の形状を更新（あいうえお専用画像を使用）
+         */
+        function updateMouthShape(currentTime, character) {
+            if (!subtitleState || !subtitleState.preparedSubtitles) return;
+            
+            const mouthEl = character === 'man' ? els.manMouth : els.womanMouth;
+            if (!mouthEl) return;
+            
+            // 現在の時間に該当する文字を探す
+            let currentChar = null;
+            for (const subtitle of subtitleState.preparedSubtitles) {
+                if (currentTime >= subtitle.startTime && currentTime < subtitle.endTime) {
+                    // この字幕セグメント内で、現在の文字を探す
+                    if (subtitle.characters) {
+                        currentChar = subtitle.characters.find(
+                            char => currentTime >= char.startTime && currentTime < char.endTime
+                        );
+                        if (currentChar) break;
+                    }
+                }
+            }
+            
+            // 口の画像を更新
+            if (currentChar && currentChar.vowel !== null) {
+                const mouthImage = getMouthImageFromVowel(currentChar.vowel, character);
+                mouthEl.style.backgroundImage = `url('${mouthImage}')`;
+                // アニメーションを停止して、直接画像を表示
+                mouthEl.style.animation = 'none';
+            } else {
+                // 母音がない場合は閉じた口
+                const basePath = character === 'man' ? 'data/mouth/' : 'data/woman-mouth/';
+                mouthEl.style.backgroundImage = `url('${basePath}closed.png')`;
+                mouthEl.style.animation = 'none';
+            }
         }
 
         // 字幕のマーカーを更新（1行表示内で現在話している部分をハイライト）
@@ -968,6 +1200,11 @@
                         els.subtitleText.innerHTML = fullText;
                     }
                 }
+            }
+            
+            // 口の形状を更新（現在話しているキャラクターのみ）
+            if (currentTalkingCharacter) {
+                updateMouthShape(currentTime, currentTalkingCharacter);
             }
             
             // 再生中は継続して監視（一時停止中でない限り）

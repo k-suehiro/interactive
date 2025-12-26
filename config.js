@@ -58,17 +58,17 @@ const SLIDE_CONFIG = {
         // 字幕データ
         subtitles: {
             man: [
-                {text: "先輩お疲れ様です。", duration: 2000},
-                {text: "今度海外の販売会社向けに", duration: 3000},
-                {text: "研修動画を作るって聞いたんですけど", duration: 2000},
-                {text: "このバリューブック、中身が濃すぎて", duration: 3000},
-                {text: "どこから手を付ければいいのか⋯⋯", duration: 2000}
+                {text: "先輩お疲れ様です。", reading: "せんぱいおつかれさまです。", duration: 2000},
+                {text: "今度海外の販売会社向けに", reading: "こんどかいがいのはんばいがいしゃむけに", duration: 3000},
+                {text: "研修動画を作るって聞いたんですけど", reading: "けんしゅうどうがをつくるってきいたんですけど", duration: 2000},
+                {text: "このバリューブック、中身が濃すぎて", reading: "このばりゅーぶっく、なかみがこすぎて", duration: 3000},
+                {text: "どこから手を付ければいいのか⋯⋯", reading: "どこからてをつければいいのか", duration: 2000}
             ],
             woman: [
-                {text: "確かに情報量は多いわよね。", duration: 3000},
-                {text: "でも大丈夫。", duration: 1000},
-                {text: "まずはここを見て", duration: 2000},
-                {text: "メッセージハウスよ。", duration: 1500}
+                {text: "確かに情報量は多いわよね。", reading: "たしかにじょうほうりょうはおおいわよね。", duration: 3000},
+                {text: "でも大丈夫。", reading: "でもだいじょうぶ。", duration: 1000},
+                {text: "まずはここを見て", reading: "まずはここをみて", duration: 2000},
+                {text: "メッセージハウスよ。", reading: "めっせーじはうすよ。", duration: 1500}
             ]
         }
     },
@@ -81,15 +81,15 @@ const SLIDE_CONFIG = {
         },
         subtitles: {
             man: [
-                {text: "メッセージハウス⋯⋯？", duration: 2000},
-                {text: "家⋯⋯ですか？", duration: 2000}
+                {text: "メッセージハウス⋯⋯？", reading: "めっせーじはうす", duration: 2000},
+                {text: "家⋯⋯ですか？", reading: "いえですか？", duration: 2000}
             ],
             woman: [
-                {text: "私たちのビジネスインクジェット（BIJ）の価値を整理した", duration: 4000},
-                {text: "設計図みたいなものね。", duration: 2000},
-                {text: "屋根にあるビジョンを見て。", duration: 2000},
-                {text: "持続可能で心豊かな社会を実現する", duration: 4000},
-                {text: "これが私たちのゴールよ。", duration: 2000}
+                {text: "私たちのビジネスインクジェット（BIJ）の価値を整理した", reading: "わたしたちのびじねすいんくじぇっと（びーあいじぇー）のかちをせいりした", duration: 4000},
+                {text: "設計図みたいなものね。", reading: "せっけいずみたいなものね。", duration: 2000},
+                {text: "屋根にあるビジョンを見て。", reading: "やねにあるびじょんをみて。", duration: 2000},
+                {text: "持続可能で心豊かな社会を実現する", reading: "じぞくかのうでこころゆたかなしゃかいをじつげんする", duration: 4000},
+                {text: "これが私たちのゴールよ。", reading: "これがわたしたちのごーるよ。", duration: 2000}
             ]
         }
     },
@@ -102,14 +102,14 @@ const SLIDE_CONFIG = {
         },
         subtitles: {
             man: [
-                {text: "なるほど⋯⋯", duration: 1500},
-                {text: "そのために僕達は何を提案すればいいんですか？", duration: 3500}
+                {text: "なるほど⋯⋯", reading: "なるほど", duration: 1500},
+                {text: "そのために僕達は何を提案すればいいんですか？", reading: "そのためにぼくたちはなにをていあんすればいいんですか？", duration: 3500}
             ],
             woman: [
-                {text: "柱は大きく２つ。", duration: 2000},
-                {text: "環境負荷低減と、ストレスフリーな運用", duration: 4000},
-                {text: "そして、それを土台として支えているのが", duration: 2500},
-                {text: "EPSONの技術なの。", duration: 4000}
+                {text: "柱は大きく２つ。", reading: "はしらはおおきくふたつ。", duration: 2000},
+                {text: "環境負荷低減と、ストレスフリーな運用", reading: "かんきょうふかていげんと、すとれすふりーなうんよう", duration: 4000},
+                {text: "そして、それを土台として支えているのが", reading: "そして、それをどだいとしてささえているのが", duration: 2500},
+                {text: "EPSONの技術なの。", reading: "えぷそんのぎじゅつなの。", duration: 4000}
             ]
         }
     }

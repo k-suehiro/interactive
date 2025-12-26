@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark"> <!-- デフォルトでダークモード -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>対話型教育資料ビューアー</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class', // クラス切り替えモードを有効化
+        }
+    </script>
+    <style>
+        /* カスタムスタイル: キャラクターの配置など */
+        .character-container {
+            position: absolute;
+            bottom: 5%; /* 少し底上げして配置 */
+            transition: transform 0.3s ease;
+        }
+      .man-avatar {
+        position: relative;
+        width: 320px;
+        height: 450px;
+        max-height: 50vh;
+      }
+      .man-base {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .parts-layer {
+        position: absolute;
+        background-repeat: no-repeat;
+        background-size: contain;
+        z-index: 2;
+      }
+      /* 目と口の位置調整（man.html と同じ値） */
+      #man-eyes {
+        top: 140px;
+        left: 117px;
+        width: 90px;
+        height: 40px;
+        background-image: url("data/eyes/normal.png");
+      }
+      #man-mouth {
+        top: 190px;
+        left: 147px;
+        width: 30px;
+        height: 50px;
+        background-image: url("data/mouth/closed.png");
+      }
+      /* 瞬き */
+      @keyframes eye-blink-once {
+        0%, 45%  { background-image: url("data/eyes/normal.png"); }
+        50%, 80% { background-image: url("data/eyes/closed.png"); }
+        85%,100% { background-image: url("data/eyes/normal.png"); }
+      }
+      .blinking {
+        animation: eye-blink-once 0.24s steps(1) 0s 1;
+      }
+      /* 口パク（話す） */
+      @keyframes lip-sync {
+        0%   { background-image: url("data/mouth/closed.png"); }
+        10%  { background-image: url("data/mouth/medium.png"); }
+        25%  { background-image: url("data/mouth/wide.png"); }
+        40%  { background-image: url("data/mouth/shout.png"); }
+        55%  { background-image: url("data/mouth/medium.png"); }
+        70%  { background-image: url("data/mouth/closed.png"); }
+        85%  { background-image: url("data/mouth/medium.png"); }
+        100% { background-image: url("data/mouth/closed.png"); }
+      }
+      /* 口パク（待機） */
+      @keyframes mouth-silent {
+        0%, 100%   { background-image: url("data/mouth/closed.png"); }
+      }
+      #man-mouth.talking {
+        animation: lip-sync 1s infinite steps(1);
+      }
+      #man-mouth.silent {
+        animation: mouth-silent 3s infinite steps(1);
+      }
+      /* 女性キャラクター用スタイル */
+      .woman-avatar {
+        position: relative;
+        width: 320px;
+        height: 450px;
+        max-height: 50vh;
+      }
+      .woman-base {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      /* 女性キャラクターの目と口の位置調整（woman.html と同じ値） */
+      #woman-eyes {
+        top: 125px;
+        left: 114px;
+        width: 90px;
+        height: 40px;
+        background-image: url("data/woman-eyes/normal.png");
+      }
+      #woman-mouth {
+        top: 172px;
+        left: 145px;
+        width: 30px;
+        height: 50px;
+        background-image: url("data/woman-mouth/closed.png");
+      }
+      /* 女性キャラクターの瞬き */
+      @keyframes woman-eye-blink-once {
+        0%, 45%  { background-image: url("data/woman-eyes/normal.png"); }
+        50%, 80% { background-image: url("data/woman-eyes/closed.png"); }
+        85%,100% { background-image: url("data/woman-eyes/normal.png"); }
+      }
+      #woman-eyes.blinking {
+        animation: woman-eye-blink-once 0.24s steps(1) 0s 1;
+      }
+      /* 女性キャラクターの口パク（話す） */
+      @keyframes woman-lip-sync {
+        0%   { background-image: url("data/woman-mouth/closed.png"); }
+        10%  { background-image: url("data/woman-mouth/medium.png"); }
+        25%  { background-image: url("data/woman-mouth/wide.png"); }
+        40%  { background-image: url("data/woman-mouth/shout.png"); }
+        55%  { background-image: url("data/woman-mouth/medium.png"); }
+        70%  { background-image: url("data/woman-mouth/closed.png"); }
+        85%  { background-image: url("data/woman-mouth/medium.png"); }
+        100% { background-image: url("data/woman-mouth/closed.png"); }
+      }
+      /* 女性キャラクターの口パク（待機） */
+      @keyframes woman-mouth-silent {
+        0%, 100%   { background-image: url("data/woman-mouth/closed.png"); }
+      }
+      #woman-mouth.talking {
+        animation: woman-lip-sync 1s infinite steps(1);
+      }
+      #woman-mouth.silent {
+        animation: woman-mouth-silent 3s infinite steps(1);
+      }
+        .character-img {
+            max-height: 25vh; /* 高さを画面の25%に制限 */
+            width: auto;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
+        }
+        
+        /* スライド遷移アニメーション */
+        .fade-enter { opacity: 0; }
+        .fade-enter-active { opacity: 1; transition: opacity 0.5s; }
+        .fade-exit { opacity: 1; }
+        .fade-exit-active { opacity: 0; transition: opacity 0.5s; }
+
+        /* 背景画像エリア */
+        #scene-background {
+            background-size: cover;
+            background-position: center;
+            transition: background-image 0.5s ease-in-out;
+        }
+
+        /* 字幕コンテナ（1行表示、高さ固定） */
+        #subtitle-container {
+            min-height: 64px;
+            max-height: 64px;
+        }
+
+        /* 字幕テキスト内のマーカー */
+        .subtitle-marker {
+            background-color: rgba(59, 130, 246, 0.3);
+            padding: 2px 4px;
+            border-radius: 3px;
+            transition: all 0.2s ease;
+        }
+
+        .dark .subtitle-marker {
+            background-color: rgba(59, 130, 246, 0.4);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 flex items-center justify-center min-h-screen font-sans text-gray-800 dark:text-gray-200 transition-colors duration-300">
+
+    <!-- 右上コントロールエリア -->
+    <div class="fixed top-4 right-4 z-50 flex flex-col gap-3">
+        <!-- 再生ボタン -->
+        <button id="btn-play" class="flex items-center justify-center w-12 h-12 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white rounded-full shadow-xl transition transform hover:scale-105 border-2 border-white dark:border-gray-700" title="再生/停止">
+            <svg id="icon-play" class="w-6 h-6 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="icon-pause" class="w-6 h-6 hidden" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+        
+        <!-- 自動再生ボタン -->
+        <button id="auto-play-toggle" class="p-2 rounded-full bg-white/20 dark:bg-black/40 backdrop-blur hover:bg-black/10 dark:hover:bg-white/10 transition shadow-lg border border-gray-200 dark:border-gray-700" title="自動再生">
+            <!-- Play Icon -->
+            <svg id="icon-auto-play" class="w-6 h-6 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <!-- Stop Icon (when auto-play is active) -->
+            <svg id="icon-auto-stop" class="w-6 h-6 text-red-500 dark:text-red-400 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10h6v4H9z"></path></svg>
+        </button>
+        
+        <!-- テーマ切り替えボタン -->
+        <button id="theme-toggle" class="p-2 rounded-full bg-white/20 dark:bg-black/40 backdrop-blur hover:bg-black/10 dark:hover:bg-white/10 transition shadow-lg border border-gray-200 dark:border-gray-700">
+            <!-- Sun Icon (for Dark Mode) -->
+            <svg id="icon-sun" class="w-6 h-6 text-yellow-400 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+            <!-- Moon Icon (for Light Mode) -->
+            <svg id="icon-moon" class="w-6 h-6 text-slate-600 dark:text-slate-300 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+        </button>
+    </div>
+
+    <!-- メインアプリケーションコンテナ -->
+    <div class="relative w-full max-w-[1920px] bg-white dark:bg-gray-800 shadow-2xl overflow-hidden flex flex-col mx-auto transition-colors duration-300 border border-gray-200 dark:border-gray-700" style="aspect-ratio: 16/9; max-height: 100vh;">
+        
+        <!-- ヘッダー（進捗表示など） -->
+        <div class="absolute top-0 left-0 right-0 z-20 p-6 bg-gradient-to-b from-white/80 to-transparent dark:from-black/60 dark:to-transparent text-gray-800 dark:text-white flex justify-between items-center pointer-events-none">
+            <h1 class="text-2xl font-bold drop-shadow-sm dark:drop-shadow-md">教育資料コンテンツ</h1>
+            <div class="bg-gray-200/60 dark:bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm text-lg shadow-sm">
+                Slide: <span id="slide-indicator">01</span>
+            </div>
+        </div>
+
+        <!-- メインシーンエリア -->
+        <div id="scene-background" class="relative flex-1 bg-gray-200 dark:bg-gray-700 w-full h-full overflow-hidden">
+            
+            <!-- 背景プレースホルダー -->
+            <div class="absolute inset-0 bg-gradient-to-tr from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-900 -z-10"></div>
+
+            <!-- 左側：男性キャラクターエリア -->
+            <div class="character-container left-[15%] z-10" id="man-container">
+                <div class="man-avatar">
+                  <img id="man-base" src="" alt="Man Base" class="man-base">
+                  <div id="man-eyes" class="parts-layer"></div>
+                  <div id="man-mouth" class="parts-layer silent"></div>
+                </div>
+                
+                <!-- 話者インジケーター -->
+                <div id="man-bubble" class="absolute top-16 -right-8 bg-white dark:bg-gray-700 px-4 py-2 rounded-2xl rounded-bl-none shadow-lg opacity-0 transition-opacity duration-300 transform scale-90 border border-gray-200 dark:border-gray-600">
+                    <p class="text-sm font-bold text-blue-600 dark:text-blue-400">Talking...</p>
+                </div>
+            </div>
+
+            <!-- 右側：女性キャラクターエリア -->
+            <div class="character-container right-[15%] z-10" id="woman-container">
+                <div class="woman-avatar">
+                  <img id="woman-base" src="" alt="Woman Base" class="woman-base">
+                  <div id="woman-eyes" class="parts-layer"></div>
+                  <div id="woman-mouth" class="parts-layer silent"></div>
+                </div>
+                
+                <!-- 話者インジケーター -->
+                <div id="woman-bubble" class="absolute top-16 -left-8 bg-white dark:bg-gray-700 px-4 py-2 rounded-2xl rounded-br-none shadow-lg opacity-0 transition-opacity duration-300 transform scale-90 border border-gray-200 dark:border-gray-600">
+                    <p class="text-sm font-bold text-pink-600 dark:text-pink-400">Talking...</p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- コントロールバー（高さ固定） -->
+        <div class="absolute bottom-0 left-0 right-0 bg-white/80 dark:bg-black/60 backdrop-blur-md p-4 flex items-center justify-between z-30 text-gray-800 dark:text-white border-t border-gray-200 dark:border-white/5 transition-colors duration-300 h-24">
+            <!-- 左ナビゲーション -->
+            <button id="btn-prev" class="flex items-center space-x-2 px-6 py-3 bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed text-sm sm:text-base">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                <span class="font-medium">前へ</span>
+            </button>
+
+            <!-- 中央：字幕表示エリア（1行表示＋マーカー方式） -->
+            <div class="flex-1 flex items-center justify-center px-4">
+                <div id="subtitle-container" class="w-full max-w-4xl h-16 flex items-center justify-center bg-white/50 dark:bg-black/30 rounded-lg px-4 border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <div id="subtitle-text" class="text-lg sm:text-xl text-gray-800 dark:text-gray-100 font-medium text-center w-full">
+                        <span class="opacity-60">再生ボタンを押して開始</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右ナビゲーション -->
+            <button id="btn-next" class="flex items-center space-x-2 px-6 py-3 bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed text-sm sm:text-base">
+                <span class="font-medium">次へ</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- 設定/初期モーダル -->
+    <div id="intro-modal" class="fixed inset-0 bg-black/60 dark:bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+        <div class="bg-white dark:bg-gray-800 p-8 rounded-2xl max-w-lg w-full shadow-2xl border border-gray-200 dark:border-gray-700 transform transition-all">
+            
+            <div class="flex items-center justify-center mb-6">
+                <div class="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                    <svg class="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+            </div>
+
+            <h2 class="text-2xl font-bold mb-2 text-center text-gray-800 dark:text-white">システム準備完了</h2>
+            <p class="text-center text-gray-500 dark:text-gray-400 mb-6">
+                音声データおよびアバター画像の読み込みが完了しました。
+            </p>
+
+            <div class="space-y-3 mb-8">
+                <div class="flex items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-100 dark:border-gray-600">
+                    <svg class="w-5 h-5 text-blue-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                    <div>
+                        <p class="text-sm font-semibold text-gray-700 dark:text-gray-200">音声エンジン</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">data/man-01.wav ~ </p>
+                    </div>
+                </div>
+                <div class="flex items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-100 dark:border-gray-600">
+                    <svg class="w-5 h-5 text-pink-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                    <div>
+                        <p class="text-sm font-semibold text-gray-700 dark:text-gray-200">アバターリソース</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">data/man.png, data/wman.png</p>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="document.getElementById('intro-modal').classList.add('fade-exit-active'); setTimeout(() => document.getElementById('intro-modal').remove(), 500);" class="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl transition font-bold text-lg shadow-lg shadow-blue-500/30">
+                セッションを開始する
+            </button>
+        </div>
+    </div>
+
+    <!-- 設定ファイルを読み込み -->
+    <script src="config.js"></script>
+
+    <script>
+        /**
+         * 設定エリア
+         */
+        const USE_REAL_ASSETS = true; // 指定パスを使用するためにtrueに変更
+
+        // 状態管理
+        let currentSlide = 1;
+        // SLIDE_CONFIGから自動的にスライド数を計算
+        const totalSlides = Object.keys(SLIDE_CONFIG).length;
+        let isPlaying = false;
+        let isPaused = false; // 一時停止状態
+        let isAutoPlayMode = false; // 自動再生モード
+        let audioContext = null;
+        let currentAudio = null;
+        let sequenceTimeout = null;
+        let subtitleAnimationFrame = null; // 字幕マーカー更新用のrequestAnimationFrame ID
+        let subtitleState = null; // 字幕状態（{preparedSubtitles, activeIndex}）
+        let currentTalkingCharacter = null; // 現在話しているキャラクター（'man' または 'woman'）
+        let preloadedAudios = {}; // プリロード済み音声のキャッシュ
+
+        // DOM要素
+        const els = {
+            manBase: document.getElementById('man-base'),
+            manEyes: document.getElementById('man-eyes'),
+            manMouth: document.getElementById('man-mouth'),
+            womanBase: document.getElementById('woman-base'),
+            womanEyes: document.getElementById('woman-eyes'),
+            womanMouth: document.getElementById('woman-mouth'),
+            manBubble: document.getElementById('man-bubble'),
+            womanBubble: document.getElementById('woman-bubble'),
+            slideIndicator: document.getElementById('slide-indicator'),
+            btnPrev: document.getElementById('btn-prev'),
+            btnNext: document.getElementById('btn-next'),
+            btnPlay: document.getElementById('btn-play'),
+            iconPlay: document.getElementById('icon-play'),
+            iconPause: document.getElementById('icon-pause'),
+            subtitleContainer: document.getElementById('subtitle-container'),
+            subtitleText: document.getElementById('subtitle-text'),
+            sceneBg: document.getElementById('scene-background'),
+            themeToggle: document.getElementById('theme-toggle'),
+            iconSun: document.getElementById('icon-sun'),
+            iconMoon: document.getElementById('icon-moon'),
+            autoPlayToggle: document.getElementById('auto-play-toggle'),
+            iconAutoPlay: document.getElementById('icon-auto-play'),
+            iconAutoStop: document.getElementById('icon-auto-stop')
+        };
+
+        // 初期化
+        function init() {
+            updateSlideUI();
+            setupEventListeners();
+            initTheme();
+            startManBlinkLoop();
+            startWomanBlinkLoop();
+            // 最初のスライドの音声をプリロード
+            preloadNextSlideAudios();
+        }
+
+        // テーマ管理
+        function initTheme() {
+            // 初期状態はHTMLタグのclassに従う(今回はdark)
+            updateThemeIcon();
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+            } else {
+                html.classList.add('dark');
+            }
+            updateThemeIcon();
+        }
+
+        function updateThemeIcon() {
+            const isDark = document.documentElement.classList.contains('dark');
+            if (isDark) {
+                els.iconSun.classList.remove('hidden');
+                els.iconMoon.classList.add('hidden');
+            } else {
+                els.iconSun.classList.add('hidden');
+                els.iconMoon.classList.remove('hidden');
+            }
+        }
+
+        // イベントリスナー設定
+        function setupEventListeners() {
+            els.btnPrev.addEventListener('click', () => changeSlide(-1));
+            els.btnNext.addEventListener('click', () => changeSlide(1));
+            els.btnPlay.addEventListener('click', togglePlay);
+            els.themeToggle.addEventListener('click', toggleTheme);
+            els.autoPlayToggle.addEventListener('click', toggleAutoPlay);
+            
+            // キーボードイベント：スペースキーで再生/一時停止
+            document.addEventListener('keydown', (e) => {
+                // フォーカス可能な要素（input、textarea、buttonなど）にフォーカスがある場合は無視
+                const activeElement = document.activeElement;
+                const isInputFocused = activeElement && (
+                    activeElement.tagName === 'INPUT' ||
+                    activeElement.tagName === 'TEXTAREA' ||
+                    activeElement.isContentEditable
+                );
+                
+                if (isInputFocused) {
+                    return;
+                }
+                
+                // スペースキーで再生/一時停止
+                if (e.code === 'Space' || e.key === ' ') {
+                    e.preventDefault(); // ページのスクロールを防ぐ
+                    togglePlay();
+                }
+            });
+        }
+
+        /**
+         * 男性キャラクターの瞬き制御（man.html の挙動を移植）
+         */
+        const MAN_MIN_BLINK = 3200;
+        const MAN_MAX_BLINK = 9000;
+
+        function triggerManBlink(isDouble = false) {
+            if (!els.manEyes) return;
+            els.manEyes.classList.add('blinking');
+            setTimeout(() => {
+                els.manEyes.classList.remove('blinking');
+                if (isDouble) {
+                    setTimeout(() => {
+                        els.manEyes.classList.add('blinking');
+                        setTimeout(() => els.manEyes.classList.remove('blinking'), 180);
+                    }, 120);
+                }
+            }, 180);
+        }
+
+        function scheduleManBlink() {
+            const next = Math.random() * (MAN_MAX_BLINK - MAN_MIN_BLINK) + MAN_MIN_BLINK;
+            setTimeout(() => {
+                const doubleBlink = Math.random() < 0.18;
+                triggerManBlink(doubleBlink);
+                scheduleManBlink();
+            }, next);
+        }
+
+        function startManBlinkLoop() {
+            // 即時1回実行してからループを開始
+            triggerManBlink(false);
+            scheduleManBlink();
+        }
+
+        /**
+         * 女性キャラクターの瞬き制御（woman.html の挙動を移植）
+         */
+        const WOMAN_MIN_BLINK = 3200;
+        const WOMAN_MAX_BLINK = 9000;
+
+        function triggerWomanBlink(isDouble = false) {
+            if (!els.womanEyes) return;
+            els.womanEyes.classList.add('blinking');
+            setTimeout(() => {
+                els.womanEyes.classList.remove('blinking');
+                if (isDouble) {
+                    setTimeout(() => {
+                        els.womanEyes.classList.add('blinking');
+                        setTimeout(() => els.womanEyes.classList.remove('blinking'), 180);
+                    }, 120);
+                }
+            }, 180);
+        }
+
+        function scheduleWomanBlink() {
+            const next = Math.random() * (WOMAN_MAX_BLINK - WOMAN_MIN_BLINK) + WOMAN_MIN_BLINK;
+            setTimeout(() => {
+                const doubleBlink = Math.random() < 0.18;
+                triggerWomanBlink(doubleBlink);
+                scheduleWomanBlink();
+            }, next);
+        }
+
+        function startWomanBlinkLoop() {
+            // 即時1回実行してからループを開始
+            triggerWomanBlink(false);
+            scheduleWomanBlink();
+        }
+
+        // ファイル名生成ユーティリティ（新しい設定構造に対応）
+        function getAssetPaths(slideNum) {
+            const config = SLIDE_CONFIG[slideNum];
+            if (!config) {
+                console.warn(`Slide ${slideNum} not found in SLIDE_CONFIG`);
+                return null;
+            }
+            
+            const basePath = DEFAULT_CONFIG.basePath;
+            
+            // デフォルト値の取得ヘルパー関数
+            const getDefaultAvatar = (gender, type) => {
+                return config.avatars?.[gender]?.[type] 
+                    || DEFAULT_CONFIG.defaultAvatars[gender][type];
+            };
+            
+            const getDefaultBackground = () => {
+                if (config.background) return config.background;
+                const idx = (slideNum - 1) % DEFAULT_CONFIG.defaultBackgrounds.length;
+                return DEFAULT_CONFIG.defaultBackgrounds[idx];
+            };
+            
+            if (USE_REAL_ASSETS) {
+                return {
+                    // アバター画像パス
+                    manImgStatic: basePath + getDefaultAvatar('man', 'static'),
+                    manImgAnim: basePath + getDefaultAvatar('man', 'animated'),
+                    womanImgStatic: basePath + getDefaultAvatar('woman', 'static'),
+                    womanImgAnim: basePath + getDefaultAvatar('woman', 'animated'),
+                    
+                    // 音声ファイルパス
+                    manAudio: basePath + config.audio.man,
+                    womanAudio: basePath + config.audio.woman,
+                    
+                    // 背景画像
+                    bg: basePath + getDefaultBackground()
+                };
+            } else {
+                // デモ用パス（fallback）
+                const numStr = String(slideNum).padStart(2, '0');
+                return {
+                    manImgStatic: `https://placehold.co/200x350/2563eb/white?text=Man+PNG+(Slide${numStr})`,
+                    manImgAnim: `https://placehold.co/200x350/1d4ed8/white?text=Man+GIF+(Talking)`,
+                    womanImgStatic: `https://placehold.co/200x350/db2777/white?text=Woman+PNG+(Slide${numStr})`,
+                    womanImgAnim: `https://placehold.co/200x350/be185d/white?text=Woman+GIF+(Talking)`,
+                    manAudio: null, 
+                    womanAudio: null,
+                    bg: null 
+                };
+            }
+        }
+
+        // 字幕データを取得する関数
+        function getSubtitles(slideNum) {
+            const config = SLIDE_CONFIG[slideNum];
+            if (!config || !config.subtitles) {
+                return { man: [], woman: [] };
+            }
+            return config.subtitles;
+        }
+
+        // 音声をプリロードする関数
+        function preloadAudio(src, key) {
+            if (!src || !USE_REAL_ASSETS) return;
+            
+            // 既にプリロード済みの場合はスキップ
+            if (preloadedAudios[key]) {
+                return Promise.resolve();
+            }
+            
+            return new Promise((resolve, reject) => {
+                const audio = new Audio();
+                audio.preload = 'auto';
+                
+                audio.addEventListener('canplaythrough', () => {
+                    preloadedAudios[key] = audio;
+                    resolve();
+                }, { once: true });
+                
+                audio.addEventListener('error', (e) => {
+                    console.warn(`Failed to preload audio: ${src}`);
+                    resolve(); // エラーでも進行を止めない
+                }, { once: true });
+                
+                audio.src = src;
+                audio.load();
+            });
+        }
+
+        // 次のスライドの音声をプリロード
+        function preloadNextSlideAudios() {
+            const nextSlide = currentSlide < totalSlides ? currentSlide + 1 : 1;
+            const nextAssets = getAssetPaths(nextSlide);
+            
+            if (nextAssets && nextAssets.manAudio) {
+                preloadAudio(nextAssets.manAudio, `slide${nextSlide}_man`);
+            }
+            if (nextAssets && nextAssets.womanAudio) {
+                preloadAudio(nextAssets.womanAudio, `slide${nextSlide}_woman`);
+            }
+        }
+
+        // UI更新
+        function updateSlideUI() {
+            const assets = getAssetPaths(currentSlide);
+            if (!assets) {
+                console.error(`Failed to load assets for slide ${currentSlide}`);
+                return;
+            }
+            
+            const slideStr = String(currentSlide).padStart(2, '0');
+            
+            els.slideIndicator.textContent = slideStr;
+            
+            setManBaseImage(assets);
+            setWomanBaseImage(assets);
+            
+            if (assets.bg) {
+                els.sceneBg.style.backgroundImage = `url('${assets.bg}')`;
+            }
+
+            els.btnPrev.disabled = currentSlide <= 1;
+            els.btnNext.disabled = currentSlide >= totalSlides;
+
+            // 現在のスライドの音声をプリロード
+            if (assets.manAudio) {
+                preloadAudio(assets.manAudio, `slide${currentSlide}_man`);
+            }
+            if (assets.womanAudio) {
+                preloadAudio(assets.womanAudio, `slide${currentSlide}_woman`);
+            }
+            
+            // 次のスライドの音声もプリロード
+            preloadNextSlideAudios();
+
+            // 自動再生モードの場合は、stopAll()を呼ばずに必要なリセットだけ行う
+            if (!isAutoPlayMode) {
+                stopAll();
+            } else {
+                // 自動再生モードの場合は、キャラクター状態と音声だけリセット
+                setCharacterState('man', 'silent');
+                setCharacterState('woman', 'silent');
+                
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                    currentAudio = null;
+                }
+                
+                if (audioContext) {
+                    audioContext.close();
+                    audioContext = null;
+                }
+                
+                clearTimeout(sequenceTimeout);
+            }
+        }
+
+        // スライド切り替え
+        function changeSlide(direction) {
+            const newSlide = currentSlide + direction;
+            if (newSlide >= 1 && newSlide <= totalSlides) {
+                currentSlide = newSlide;
+                updateSlideUI();
+                els.statusText.textContent = "準備完了";
+            }
+        }
+
+        // キャラクター状態切り替え関数
+        function setCharacterState(character, state) {
+            const bubble = character === 'man' ? els.manBubble : els.womanBubble;
+
+            if (character === 'man') {
+                if (els.manMouth) {
+                    els.manMouth.classList.toggle('talking', state === 'talking');
+                    els.manMouth.classList.toggle('silent', state !== 'talking');
+                }
+            } else {
+                if (els.womanMouth) {
+                    els.womanMouth.classList.toggle('talking', state === 'talking');
+                    els.womanMouth.classList.toggle('silent', state !== 'talking');
+                }
+            }
+
+            if (bubble) {
+                if (state === 'talking') {
+                    bubble.style.opacity = '1';
+                    bubble.style.transform = 'scale(1)';
+                } else {
+                    bubble.style.opacity = '0';
+                    bubble.style.transform = 'scale(0.9)';
+                }
+            }
+        }
+
+        // base.png が無い場合は man.png を使う（自動フォールバック）
+        function setManBaseImage(assets) {
+            if (!els.manBase) return;
+            const fallback = assets.manImgStatic;
+            if (!fallback) {
+                els.manBase.src = '';
+                return;
+            }
+
+            // man.png → base.png を試し、失敗したら man.png のまま使う
+            const candidate = fallback.replace(/man\.png$/i, 'base.png');
+            if (candidate === fallback) {
+                els.manBase.src = fallback;
+                return;
+            }
+
+            const img = new Image();
+            img.onload = () => { els.manBase.src = candidate; };
+            img.onerror = () => { els.manBase.src = fallback; };
+            img.src = candidate;
+        }
+
+        // woman-base.png が無い場合は wman.png を使う（自動フォールバック）
+        function setWomanBaseImage(assets) {
+            if (!els.womanBase) return;
+            const fallback = assets.womanImgStatic;
+            if (!fallback) {
+                els.womanBase.src = '';
+                return;
+            }
+
+            // woman-base.png を試し、失敗したら wman.png を使う（woman.html と同じ挙動）
+            // まず、wman.png から woman-base.png に変換を試す
+            let candidate = fallback.replace(/wman\.png$/i, 'woman-base.png');
+            
+            // 変換できなかった場合は、パスから直接 woman-base.png を構築
+            if (candidate === fallback) {
+                const basePath = DEFAULT_CONFIG.basePath;
+                candidate = basePath + 'data/woman-base.png';
+            }
+
+            const img = new Image();
+            img.onload = () => { els.womanBase.src = candidate; };
+            img.onerror = () => { els.womanBase.src = fallback; };
+            img.src = candidate;
+        }
+
+        // 自動再生モードの切り替え
+        async function toggleAutoPlay() {
+            if (isAutoPlayMode) {
+                // 自動再生モードを停止
+                isAutoPlayMode = false;
+                stopAll();
+                updateAutoPlayButtonUI(false);
+            } else {
+                // 自動再生モードを開始
+                isAutoPlayMode = true;
+                currentSlide = 1; // 最初のスライドに戻る
+                updateSlideUI();
+                updateAutoPlayButtonUI(true);
+                
+                // 最初のスライドの音声が完全にロードされるまで待つ
+                const assets = getAssetPaths(currentSlide);
+                if (assets.manAudio) {
+                    await preloadAudio(assets.manAudio, `slide${currentSlide}_man`);
+                }
+                if (assets.womanAudio) {
+                    await preloadAudio(assets.womanAudio, `slide${currentSlide}_woman`);
+                }
+                
+                // 音声がロードされたら再生開始
+                if (isAutoPlayMode) {
+                    startSequence();
+                }
+            }
+        }
+
+        function updateAutoPlayButtonUI(isActive) {
+            if (isActive) {
+                els.iconAutoPlay.classList.add('hidden');
+                els.iconAutoStop.classList.remove('hidden');
+            } else {
+                els.iconAutoPlay.classList.remove('hidden');
+                els.iconAutoStop.classList.add('hidden');
+            }
+        }
+
+        // 再生・一時停止トグル
+        function togglePlay() {
+            if (isPaused) {
+                // 一時停止中なら再開
+                resumePlayback();
+            } else if (isPlaying) {
+                // 再生中なら一時停止
+                pausePlayback();
+            } else {
+                // 停止中なら再生開始
+                startSequence();
+            }
+        }
+
+        // 一時停止処理
+        function pausePlayback() {
+            isPaused = true;
+            isPlaying = false;
+            updatePlayBtnUI(false);
+            
+            // 音声を一時停止
+            if (currentAudio && !currentAudio.paused) {
+                currentAudio.pause();
+            }
+            
+            // 現在話しているキャラクターを静止画に切り替え
+            if (currentTalkingCharacter) {
+                setCharacterState(currentTalkingCharacter, 'silent');
+            }
+            
+            // 字幕マーカー更新を停止（一時停止時はcurrentTimeが保持されるため、再開時に自動的に同期される）
+            if (subtitleAnimationFrame) {
+                cancelAnimationFrame(subtitleAnimationFrame);
+                subtitleAnimationFrame = null;
+            }
+        }
+
+        // 再生再開処理
+        function resumePlayback() {
+            isPaused = false;
+            isPlaying = true;
+            updatePlayBtnUI(true);
+            
+            // 音声を再開
+            if (currentAudio && currentAudio.paused) {
+                currentAudio.play().catch(e => {
+                    console.warn("Resume playback error", e);
+                });
+            }
+            
+            // 一時停止前に話していたキャラクターをGIFに戻す
+            if (currentTalkingCharacter) {
+                setCharacterState(currentTalkingCharacter, 'talking');
+            }
+            
+            // 字幕マーカー更新を再開（currentTimeは保持されているため、自動的に同期される）
+            if (subtitleState && currentAudio) {
+                updateSubtitleMarker();
+            }
+        }
+
+        function updatePlayBtnUI(playing) {
+            if (playing) {
+                els.iconPlay.classList.add('hidden');
+                els.iconPause.classList.remove('hidden');
+                els.btnPlay.classList.replace('bg-blue-600', 'bg-red-500');
+                els.btnPlay.classList.replace('hover:bg-blue-700', 'hover:bg-red-600');
+                els.btnPlay.classList.replace('dark:bg-blue-500', 'dark:bg-red-500');
+            } else {
+                els.iconPlay.classList.remove('hidden');
+                els.iconPause.classList.add('hidden');
+                els.btnPlay.classList.replace('bg-red-500', 'bg-blue-600');
+                els.btnPlay.classList.replace('hover:bg-red-600', 'hover:bg-blue-700');
+                els.btnPlay.classList.replace('dark:bg-red-500', 'dark:bg-blue-500');
+            }
+        }
+
+        // シーケンス停止処理
+        function stopAll() {
+            isPlaying = false;
+            isPaused = false; // 一時停止状態もリセット
+            updatePlayBtnUI(false);
+            
+            setCharacterState('man', 'silent');
+            setCharacterState('woman', 'silent');
+            currentTalkingCharacter = null; // 話しているキャラクターをリセット
+
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+                currentAudio = null;
+            }
+
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            
+            clearTimeout(sequenceTimeout);
+            stopSubtitleDisplay();
+            
+            // 自動再生モードも停止
+            if (isAutoPlayMode) {
+                isAutoPlayMode = false;
+                updateAutoPlayButtonUI(false);
+            }
+        }
+
+        // 字幕データから累積時間を計算して準備
+        function prepareSubtitles(subtitleArray) {
+            if (!subtitleArray || subtitleArray.length === 0) {
+                return [];
+            }
+
+            let currentTime = 0;
+            return subtitleArray.map(item => {
+                const duration = typeof item === 'string' ? 2000 : (item.duration || 2000);
+                const startTime = currentTime;
+                const endTime = currentTime + duration;
+                currentTime = endTime;
+                return {
+                    text: typeof item === 'string' ? item : item.text,
+                    duration: duration,
+                    startTime: startTime,
+                    endTime: endTime
+                };
+            });
+        }
+
+        // 字幕を1行で表示する関数（マーカー方式）
+        function renderSubtitleWithMarker(preparedSubtitles) {
+            if (!els.subtitleText) return;
+            
+            if (!preparedSubtitles || preparedSubtitles.length === 0) {
+                els.subtitleText.innerHTML = '<span class="opacity-60">字幕データがありません</span>';
+                return;
+            }
+
+            // 全字幕を結合して1行のテキストとして表示
+            const fullText = preparedSubtitles.map(sub => sub.text).join('');
+            els.subtitleText.innerHTML = fullText;
+        }
+
+        // 字幕のマーカーを更新（1行表示内で現在話している部分をハイライト）
+        function updateSubtitleMarker() {
+            if (!currentAudio || !subtitleState) {
+                subtitleAnimationFrame = null;
+                return;
+            }
+            
+            // 一時停止中はマーカー更新を停止（再開時に自動的に同期される）
+            if (isPaused || !isPlaying) {
+                subtitleAnimationFrame = null;
+                return;
+            }
+            
+            // 音声が一時停止中でも、再生準備中（readyStateが十分な場合）は更新を続ける
+            // これにより、音声再生開始直後でもマーカー更新が継続される
+            if (currentAudio.paused && currentAudio.readyState < 3) {
+                subtitleAnimationFrame = null;
+                return;
+            }
+            
+            const currentTime = currentAudio.currentTime * 1000; // ミリ秒に変換
+            const activeIndex = subtitleState.preparedSubtitles.findIndex(
+                sub => currentTime >= sub.startTime && currentTime < sub.endTime
+            );
+            
+            // マーカーを更新（activeIndexが-1の場合も処理）
+            if (activeIndex !== subtitleState.activeIndex) {
+                subtitleState.activeIndex = activeIndex;
+                if (activeIndex >= 0) {
+                    updateSubtitleHighlight(activeIndex);
+                } else {
+                    // どの字幕にも該当しない場合は、全字幕を通常表示
+                    const preparedSubtitles = subtitleState.preparedSubtitles;
+                    const fullText = preparedSubtitles.map(sub => sub.text).join('');
+                    if (els.subtitleText) {
+                        els.subtitleText.innerHTML = fullText;
+                    }
+                }
+            }
+            
+            // 再生中は継続して監視（一時停止中でない限り）
+            if (isPlaying && !isPaused) {
+                subtitleAnimationFrame = requestAnimationFrame(updateSubtitleMarker);
+            } else {
+                subtitleAnimationFrame = null;
+            }
+        }
+
+        // 字幕のハイライトを更新（1行表示内でマーカーを表示）
+        function updateSubtitleHighlight(activeIndex) {
+            if (!els.subtitleText || !subtitleState || activeIndex < 0) return;
+            
+            const preparedSubtitles = subtitleState.preparedSubtitles;
+            let html = '';
+            
+            preparedSubtitles.forEach((sub, index) => {
+                const text = sub.text;
+                if (index === activeIndex) {
+                    // 現在話している部分をマーカーで囲む
+                    html += `<span class="subtitle-marker">${text}</span>`;
+                } else {
+                    // それ以外は通常表示
+                    html += `<span>${text}</span>`;
+                }
+            });
+            
+            els.subtitleText.innerHTML = html;
+        }
+
+
+        // 字幕表示を開始（1行表示＋マーカー方式）
+        function startSubtitleDisplay(subtitleArray) {
+            // 既存のアニメーションフレームをキャンセル
+            stopSubtitleDisplay();
+            
+            if (!subtitleArray || subtitleArray.length === 0) {
+                if (els.subtitleText) {
+                    els.subtitleText.innerHTML = '<span class="opacity-60">字幕データがありません</span>';
+                }
+                return;
+            }
+
+            // 字幕データを準備
+            const preparedSubtitles = prepareSubtitles(subtitleArray);
+            
+            // 字幕状態を初期化
+            subtitleState = {
+                preparedSubtitles: preparedSubtitles,
+                activeIndex: -1
+            };
+
+            // 字幕を1行で表示
+            renderSubtitleWithMarker(preparedSubtitles);
+
+            // マーカー更新は音声再生開始時に開始されるため、ここでは開始しない
+            // （playAudioWrapper内で音声再生開始後にupdateSubtitleMarker()が呼ばれる）
+        }
+
+        // 字幕表示を停止
+        function stopSubtitleDisplay() {
+            if (subtitleAnimationFrame) {
+                cancelAnimationFrame(subtitleAnimationFrame);
+                subtitleAnimationFrame = null;
+            }
+            subtitleState = null;
+            if (els.subtitleText) {
+                els.subtitleText.innerHTML = '<span class="opacity-60">再生ボタンを押して開始</span>';
+            }
+        }
+
+
+        // メインロジック：会話シーケンスの開始
+        async function startSequence() {
+            isPlaying = true;
+            updatePlayBtnUI(true);
+            stopSubtitleDisplay(); // 既存の字幕表示をクリア
+
+            const assets = getAssetPaths(currentSlide);
+            if (!assets) {
+                console.error(`Failed to load assets for slide ${currentSlide}`);
+                return;
+            }
+            const slideSubtitles = getSubtitles(currentSlide);
+
+            // 最初は静止画を表示
+            setCharacterState('man', 'silent');
+            setCharacterState('woman', 'silent');
+
+            try {
+                // 男性パート再生前：0.3秒静止画を表示
+                await wait(300);
+                if (!isPlaying && !isAutoPlayMode) return;
+                
+                // 男性の字幕を全表示＋マーカー方式で開始
+                if (Array.isArray(slideSubtitles.man) && slideSubtitles.man.length > 0) {
+                    startSubtitleDisplay(slideSubtitles.man);
+                }
+                currentTalkingCharacter = 'man'; // 現在話しているキャラクターを記録
+                setCharacterState('man', 'talking');
+                
+                await playAudioWrapper(assets.manAudio, 'man');
+                
+                // 音声再生終了時に字幕表示を停止
+                stopSubtitleDisplay();
+                currentTalkingCharacter = null; // 話し終わったのでリセット 
+                
+                if (!isPlaying && !isAutoPlayMode) return;
+                setCharacterState('man', 'silent');
+                
+                // 待機中
+                await wait(500);
+                if (!isPlaying && !isAutoPlayMode) return;
+
+                // 女性パート再生前：0.3秒静止画を表示
+                await wait(300);
+                if (!isPlaying && !isAutoPlayMode) return;
+                
+                // 女性の字幕を全表示＋マーカー方式で開始
+                if (Array.isArray(slideSubtitles.woman) && slideSubtitles.woman.length > 0) {
+                    startSubtitleDisplay(slideSubtitles.woman);
+                }
+                currentTalkingCharacter = 'woman'; // 現在話しているキャラクターを記録
+                setCharacterState('woman', 'talking');
+                
+                await playAudioWrapper(assets.womanAudio, 'woman');
+                
+                // 音声再生終了時に字幕表示を停止
+                stopSubtitleDisplay();
+                currentTalkingCharacter = null; // 話し終わったのでリセット
+
+                if (!isPlaying && !isAutoPlayMode) return;
+                setCharacterState('woman', 'silent');
+                
+                // 自動再生モードの場合は自動的に次のスライドに進む
+                if (isAutoPlayMode) {
+                    await wait(1000); // 1秒待機
+                    if (!isAutoPlayMode) return; // 自動再生モードが停止された場合は終了
+                    
+                    // 次のスライドに進む（最後のスライドの場合は最初に戻る）
+                    if (currentSlide < totalSlides) {
+                        currentSlide++;
+                    } else {
+                        currentSlide = 1; // ループして最初に戻る
+                    }
+                    
+                    updateSlideUI();
+                    
+                    // 次のスライドのシーケンスを自動的に開始
+                    if (isAutoPlayMode) {
+                        startSequence();
+                    } else {
+                        updatePlayBtnUI(false);
+                    }
+                } else {
+                    // 通常モードの場合は停止
+                    isPlaying = false;
+                    updatePlayBtnUI(false);
+                }
+
+            } catch (e) {
+                console.error("Playback error:", e);
+                stopAll();
+                els.statusText.textContent = "エラーが発生しました";
+            }
+        }
+
+        // 音声再生ラッパー
+        function playAudioWrapper(src, type) {
+            return new Promise((resolve, reject) => {
+                if (!isPlaying && !isAutoPlayMode) {
+                    resolve();
+                    return;
+                }
+
+                if (USE_REAL_ASSETS && src) {
+                    // 常に新しいAudioオブジェクトを作成（確実に最初から再生するため）
+                    currentAudio = new Audio(src);
+                    
+                    // 必ず最初から再生するようにリセット
+                    currentAudio.currentTime = 0;
+                    currentAudio.load(); // 音声をリロードして確実にリセット
+                    
+                    // 音声が完全にロードされるまで待つ
+                    const onCanPlayThrough = () => {
+                        currentAudio.removeEventListener('canplaythrough', onCanPlayThrough);
+                        currentAudio.removeEventListener('error', onError);
+                        
+                        // 再度リセット（念のため）
+                        currentAudio.currentTime = 0;
+                        
+                        // 再生開始
+                        currentAudio.play().then(() => {
+                            // 音声再生開始時に字幕マーカー更新を開始
+                            // 少し遅延を入れて、音声再生が確実に開始された後にマーカー更新を開始
+                            setTimeout(() => {
+                                if (subtitleState && currentAudio && !currentAudio.paused) {
+                                    updateSubtitleMarker();
+                                }
+                            }, 50);
+                        }).catch(e => {
+                            console.warn("Autoplay blocked or file error", e);
+                            simulateAudio(type).then(resolve);
+                        });
+                    };
+                    
+                    const onError = (e) => {
+                        currentAudio.removeEventListener('canplaythrough', onCanPlayThrough);
+                        currentAudio.removeEventListener('error', onError);
+                        console.error(`Audio file not found: ${src}`);
+                        console.warn("Switching to simulation mode due to missing file.");
+                        simulateAudio(type).then(resolve);
+                    };
+                    
+                    currentAudio.addEventListener('canplaythrough', onCanPlayThrough, { once: true });
+                    currentAudio.addEventListener('error', onError, { once: true });
+                    
+                    // 既にロード済みの場合はすぐに再生
+                    if (currentAudio.readyState >= 3) { // HAVE_FUTURE_DATA以上
+                        onCanPlayThrough();
+                    }
+                    
+                    currentAudio.onended = () => {
+                        currentAudio = null;
+                        resolve();
+                    };
+
+                } else {
+                    simulateAudio(type).then(resolve);
+                }
+            });
+        }
+
+        // デモ用：ビープ音
+        function simulateAudio(type) {
+            return new Promise((resolve) => {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!audioContext) audioContext = new AudioContext();
+
+                const duration = type === 'man' ? 2000 : 2500;
+                
+                try {
+                    const osc = audioContext.createOscillator();
+                    const gain = audioContext.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioContext.destination);
+                    
+                    osc.frequency.value = type === 'man' ? 300 : 500;
+                    gain.gain.value = 0.05;
+
+                    osc.start();
+                    osc.stop(audioContext.currentTime + (duration / 1000));
+                } catch(e) {
+                }
+
+                sequenceTimeout = setTimeout(() => {
+                    resolve();
+                }, duration);
+            });
+        }
+
+        function wait(ms) {
+            return new Promise(resolve => {
+                sequenceTimeout = setTimeout(resolve, ms);
+            });
+        }
+
+        init();
+
+    </script>
+</body>
+</html>
